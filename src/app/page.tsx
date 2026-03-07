@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import CalendarView from '@/components/CalendarView';
 import GanttView from '@/components/GanttView';
 import ProjectToggles from '@/components/ProjectToggles';
@@ -7,10 +8,49 @@ import { useAppStore } from '@/lib/store';
 import { parseEmailWithLLM } from '@/lib/llm';
 
 export default function Home() {
-  const { addEvent, projects, events, toggleEvent } = useAppStore();
+  const { addEvent, projects, events, toggleEvent, setProjects, setEvents } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      // Fetch projects
+      const { data: projData, error: projErr } = await supabase.from('projects').select('*');
+      if (!projErr && projData) {
+        const mappedProjects = projData.map(p => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          isActive: p.is_active
+        }));
+        setProjects(mappedProjects);
+      }
+
+      // Fetch events
+      const { data: evtData, error: evtErr } = await supabase.from('events').select('*');
+      if (!evtErr && evtData) {
+        const mappedEvents = evtData.map(e => ({
+          id: e.id,
+          projectId: e.project_id,
+          title: e.title,
+          type: e.type,
+          startTime: new Date(e.start_time),
+          endTime: new Date(e.end_time),
+          source: e.source,
+          externalId: e.external_id,
+          isToggled: e.is_toggled,
+          inferredInstrumentation: {
+            timpaniRequired: e.timpani_required || false,
+            percussionRequired: e.percussion_required || false,
+            notes: e.inferred_notes || '',
+          }
+        }));
+        setEvents(mappedEvents);
+      }
+    }
+    fetchData();
+  }, [setProjects, setEvents]);
 
   const processTextWithLLM = async (text: string) => {
     setIsProcessing(true);
