@@ -45,7 +45,7 @@ export async function GET() {
     }
 
 
-    const parsedEvents = [];
+    const parsedEvents: any[] = [];
     const events = icsData.split('BEGIN:VEVENT');
     
     // Skip the first block (VCALENDAR header)
@@ -81,7 +81,6 @@ export async function GET() {
         
         const year = startDate.getFullYear();
         if (year !== 2026 && year !== 2027) continue;
-
 
         const isAllDay = dtstartMatch[1].length === 8;
         const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
@@ -128,9 +127,7 @@ export async function GET() {
             external_id: uidMatch[1].trim(),
             is_toggled: true
         });
-
     }
-
 
     if (parsedEvents.length > 0) {
       // Create unique orchestrations
@@ -167,9 +164,7 @@ export async function GET() {
          delete e._projName;
       }
 
-
       // Deduplicate
-// events by id (keep the last one)
       const uniqueEventsMap = new Map();
       for (const event of parsedEvents) {
         uniqueEventsMap.set(event.id, event);

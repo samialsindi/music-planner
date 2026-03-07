@@ -5,7 +5,7 @@ let content = fs.readFileSync(path, 'utf8');
 
 content = content.replace(
   'const { addEvent, projects, events, toggleEvent, setProjects, setEvents } = useAppStore();',
-  'const { addEvent, projects, orchestras, setOrchestras, setProjects, setEvents } = useAppStore();'
+  'const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents } = useAppStore();'
 );
 
 content = content.replace(
