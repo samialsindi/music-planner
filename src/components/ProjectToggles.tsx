@@ -5,23 +5,43 @@ import { detectClashes } from '@/lib/clash';
 import moment from 'moment';
 
 export default function ProjectToggles() {
-  const { projects, events, toggleProject, toggleEvent } = useAppStore();
-  const clashes = detectClashes(projects, events);
+  const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
+  const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
     clashes.flatMap(c => [c.event1.id, c.event2.id])
   );
 
   return (
     <div className="glass-panel p-6 mt-6 max-h-[600px] overflow-y-auto">
-      <h3 className="text-xl font-bold heading-gradient mb-4">Granular Control</h3>
+      <h3 className="text-xl font-bold heading-gradient mb-4">Projects / Groups Control</h3>
       <p className="text-sm text-gray-400 mb-6">
         Toggle entire projects or granular rehearsals to see how it affects your clash schedule down to the minute.
       </p>
 
+
+      <div className="mb-6">
+        <h4 className="text-sm font-bold text-gray-300 mb-3 uppercase tracking-wider">Event Types</h4>
+        <div className="flex flex-wrap gap-2">
+          {(['rehearsal', 'concert', 'personal', 'other'] as const).map(type => (
+            <button
+              key={type}
+              onClick={() => toggleEventType(type)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                eventTypeFilters[type]
+                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50'
+                  : 'bg-gray-800 text-gray-500 border border-gray-700'
+              }`}
+            >
+              {type.charAt(0).toUpperCase() + type.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-col gap-6">
         {projects.map((project) => {
           const projectEvents = events
-            .filter((e) => e.projectId === project.id)
+            .filter((e) => e.projectId === project.id && eventTypeFilters[e.type as keyof typeof eventTypeFilters])
             .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
           return (
