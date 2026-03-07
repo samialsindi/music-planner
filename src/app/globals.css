@@ -177,3 +177,12 @@ a {
 .custom-gantt-theme .gantt .grid-background {
   fill: var(--background);
 }
+
+/* Force dark background on the Gantt SVG element itself */
+.custom-gantt-theme svg,
+.gantt svg {
+  background: var(--background) !important;
+}
+.gantt {
+  background: var(--background) !important;
+}
