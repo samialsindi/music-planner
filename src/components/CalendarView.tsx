@@ -12,12 +12,12 @@ export default function CalendarView() {
   
   // Format events for react-big-calendar
   const calendarEvents = events
-    .filter(e => e.isToggled) // Only show toggled events
+    .filter(e => e.isToggled && projects.find(p => p.id === e.projectId)?.isActive) // Only show toggled events for active projects
     .map(e => ({
       id: e.id,
       title: e.title,
-      start: e.startTime,
-      end: e.endTime,
+      start: new Date(e.startTime),
+      end: new Date(e.endTime),
       resource: e,
     }));
 
@@ -57,6 +57,8 @@ export default function CalendarView() {
     <div className="h-[600px] glass-panel p-6 mt-6">
       <Calendar
         localizer={localizer}
+        popup={true}
+        defaultView="month"
         events={calendarEvents}
         startAccessor="start"
         endAccessor="end"
