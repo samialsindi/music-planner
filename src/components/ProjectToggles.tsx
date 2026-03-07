@@ -7,12 +7,7 @@ import moment from 'moment';
 import { useState } from 'react';
 
 export default function ProjectToggles() {
-  const handleExportiCal = () => {
-    window.open('/api/calendar/export', '_blank');
-  };
-  const handleGcalSync = () => {
-    alert("Direct API sync to Google Calendar is currently a stub. Check GCAL_OAUTH_SETUP.md to enable this feature.");
-  };
+
   const [classifyingProjectId, setClassifyingProjectId] = useState<string | null>(null);
 
   const classifyProject = async (projectId: string) => {
