@@ -45,7 +45,7 @@ export async function GET() {
     }
 
 
-    const parsedEvents = [];
+    const parsedEvents: any[] = [];
     const events = icsData.split('BEGIN:VEVENT');
     
     // Skip the first block (VCALENDAR header)
@@ -98,13 +98,31 @@ export async function GET() {
             eventType = 'concert';
         }
 
+        // Try to extract orchestra and project from title (e.g. "NY Phil - Beethoven 9th - Rehearsal 1")
+        let orchName = 'Imported Calendar';
+        let projName = 'Imported Events';
+        let eventTitle = title;
+
+        const parts = title.split(' - ').map(s => s.trim());
+        if (parts.length >= 3) {
+            orchName = parts[0];
+            projName = parts[1];
+            eventTitle = parts.slice(2).join(' - ');
+        } else if (parts.length === 2) {
+            orchName = parts[0];
+            eventTitle = parts[1];
+        }
+
         parsedEvents.push({
             id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-            project_id: project!.id,
-            title: title,
+            _orchName: orchName,
+            _projName: projName,
+            title: eventTitle,
             type: eventType,
             start_time: startDate.toISOString(),
             end_time: endDate.toISOString(),
+            is_all_day: isAllDay,
+            status: 'approved',
             source: 'gcal',
             external_id: uidMatch[1].trim(),
             is_toggled: true
@@ -112,7 +130,41 @@ export async function GET() {
     }
 
     if (parsedEvents.length > 0) {
-      // Deduplicate events by id (keep the last one)
+      // Create unique orchestrations
+      const uniqueOrchNames = [...new Set(parsedEvents.map(e => e._orchName))];
+      for (const name of uniqueOrchNames) {
+         await supabase.from('orchestras').insert({ name, color: '#4285F4' }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
+      }
+      const { data: allOrchs } = await supabase.from('orchestras').select('id, name');
+      const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
+
+      // Create unique projects
+      const uniqueProjs = new Map(); // key: "orch_id-projName"
+      for (const e of parsedEvents) {
+         const oId = orchMap.get(e._orchName);
+         if (oId) uniqueProjs.set(`${oId}-${e._projName}`, { orchestra_id: oId, name: e._projName });
+      }
+
+      for (const proj of uniqueProjs.values()) {
+        const { data: existing } = await supabase.from('projects').select('id').eq('name', proj.name).eq('orchestra_id', proj.orchestra_id).maybeSingle();
+        if (!existing) {
+           await supabase.from('projects').insert({ ...proj, color: '#4285F4' }).select().single();
+        }
+      }
+
+      const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id');
+      const projMap = new Map(allProjs?.map(p => [`${p.orchestra_id}-${p.name}`, p.id]) || []);
+
+      // Map project_id back to events
+      for (const e of parsedEvents) {
+         const oId = orchMap.get(e._orchName);
+         const pId = projMap.get(`${oId}-${e._projName}`);
+         e.project_id = pId || project!.id; // fallback to generic GCal project
+         delete e._orchName;
+         delete e._projName;
+      }
+
+      // Deduplicate
       const uniqueEventsMap = new Map();
       for (const event of parsedEvents) {
         uniqueEventsMap.set(event.id, event);

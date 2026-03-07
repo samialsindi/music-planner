@@ -1,8 +1,16 @@
 const fs = require('fs');
-const file = 'src/components/GanttView.tsx';
-let content = fs.readFileSync(file, 'utf8');
+const path = 'src/components/GanttView.tsx';
+let content = fs.readFileSync(path, 'utf8');
 
-// Update default view to Year based on current master implementation
-content = content.replace("useState<'Month' | 'Year'>('Month')", "useState<'Month' | 'Year'>('Year')");
+// Filter out pending events
+content = content.replace(
+  "const { events, projects, eventTypeFilters } = useAppStore();",
+  "const { events, projects, eventTypeFilters } = useAppStore();\n  const activeEventsList = events.filter(e => e.status !== 'pending');"
+);
 
-fs.writeFileSync(file, content);
+content = content.replace(
+  "const activeEvents = events.filter((e) => {",
+  "const activeEvents = activeEventsList.filter((e) => {"
+);
+
+fs.writeFileSync(path, content, 'utf8');

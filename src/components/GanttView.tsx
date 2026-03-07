@@ -9,6 +9,7 @@ import moment from 'moment';
 
 export default function GanttView() {
   const { events, projects, eventTypeFilters } = useAppStore();
+  const activeEventsList = events.filter(e => e.status !== 'pending');
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
   const [viewMode, setViewMode] = useState<'Month' | 'Year'>('Year');
@@ -18,7 +19,7 @@ export default function GanttView() {
 
     // Filter to only events from TODAY onwards (ignoring past)
     const today = moment().startOf('day');
-    
+
     // Group events logically per project to create continuous bars in Gannt
     const activeProjects = projects.filter(p => p.isActive);
 
