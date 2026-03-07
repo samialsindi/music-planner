@@ -47,6 +47,9 @@ export function detectClashes(
         break; 
       }
 
+      // Only flag clashes between DIFFERENT projects (same-project overlap is normal)
+      if (e1.projectId === e2.projectId) continue;
+
       // We have a clash!
       const overlapStart = new Date(Math.max(e1.startTime.getTime(), e2.startTime.getTime()));
       const overlapEnd = new Date(Math.min(e1.endTime.getTime(), e2.endTime.getTime()));
