@@ -17,6 +17,7 @@
     "lucide-react": "^0.577.0",
     "moment": "^2.30.1",
     "next": "16.1.6",
+    "node-ical": "^0.25.5",
     "react": "19.2.3",
     "react-big-calendar": "^1.19.4",
     "react-dom": "19.2.3",
