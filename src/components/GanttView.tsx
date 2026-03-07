@@ -11,7 +11,7 @@ export default function GanttView() {
   const { events, projects } = useAppStore();
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
-  const [viewMode, setViewMode] = useState<'Month' | 'Year' | 'Week' | 'Day'>('Week');
+  const [viewMode, setViewMode] = useState<'Month' | 'Year' | 'Week' | 'Day'>('Year');
 
   useEffect(() => {
     if (!ganttRef.current) return;
@@ -67,14 +67,15 @@ export default function GanttView() {
 
   return (
     <div className="flex flex-col gap-4">
+
       <div className="flex justify-end gap-2 mb-2">
-        <button 
+        <button
           onClick={() => setViewMode('Day')}
           className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Day' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
         >
           Day
         </button>
-        <button 
+        <button
           onClick={() => setViewMode('Week')}
           className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Week' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
         >
@@ -86,7 +87,14 @@ export default function GanttView() {
         >
           Month
         </button>
+        <button
+          onClick={() => setViewMode('Year')}
+          className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Year' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
+        >
+          Year
+        </button>
       </div>
+
       
       <div className="glass-panel p-6 overflow-x-auto custom-gantt-theme relative min-h-[300px]">
         {events.filter(e => e.isToggled && projects.find(p => p.id === e.projectId)?.isActive).length === 0 ? (
