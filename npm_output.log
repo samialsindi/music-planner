@@ -12,13 +12,15 @@ This information is used to shape Next.js' roadmap and prioritize features.
 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
 https://nextjs.org/telemetry
 
-⚠ Duplicate page detected. src/app/page.js and src/app/page.tsx resolve to /
-⚠ Duplicate page detected. src/app/page.js and src/app/page.tsx resolve to /
-✓ Ready in 947ms
+✓ Ready in 635ms
 ○ Compiling / ...
- GET / 200 in 5.2s (compile: 4.9s, render: 318ms)
- GET / 200 in 90ms (compile: 5ms, render: 86ms)
-✓ Compiled in 1983ms
 Your app (or one of its dependencies) is using an outdated JSX transform. Update to the modern JSX transform for faster performance: https://react.dev/link/new-jsx-transform
- GET / 200 in 1373ms (compile: 824ms, render: 549ms)
- GET / 200 in 110ms (compile: 8ms, render: 102ms)
+ GET / 200 in 5.3s (compile: 4.6s, render: 702ms)
+✓ Compiled in 73ms
+✓ Compiled in 22ms
+ GET /clashes 200 in 4.0s (compile: 3.3s, render: 662ms)
+ GET / 200 in 504ms (compile: 185ms, render: 320ms)
+ GET /clashes 200 in 38ms (compile: 4ms, render: 34ms)
+ GET /gantt 404 in 900ms (compile: 871ms, render: 30ms)
+ GET / 200 in 96ms (compile: 5ms, render: 90ms)
+ GET /clashes 200 in 80ms (compile: 4ms, render: 76ms)

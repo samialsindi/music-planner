@@ -76,7 +76,15 @@ export default function GanttView() {
   }, [events, projects, viewMode, eventTypeFilters]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
+      <style jsx global>{`
+        ${projects.map(p => `
+          .gantt-proj-${p.id} .bar { fill: ${p.color} !important; opacity: 0.8; }
+          .gantt-proj-${p.id} .bar-progress { fill: ${p.color} !important; opacity: 1; }
+        `).join('')}
+      `}</style>
+      <div className="flex flex-col gap-4">
+
       <div className="flex justify-end gap-2 mb-2">
         <button
           onClick={() => setViewMode('Month')}
@@ -96,5 +104,6 @@ export default function GanttView() {
         <div ref={ganttRef} className="w-full"></div>
       </div>
     </div>
+    </>
   );
 }
