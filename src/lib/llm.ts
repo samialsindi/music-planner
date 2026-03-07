@@ -29,6 +29,8 @@ export async function parseEmailWithLLM(emailText: string, projectId: string): P
     endTime: endTime,
     source: "email",
     isToggled: true,
+    isAllDay: false,
+    status: 'approved',
     inferredInstrumentation: {
       timpaniRequired: !isAcapella,
       percussionRequired: !isAcapella,
