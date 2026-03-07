@@ -32,6 +32,40 @@ export default function ProjectToggles() {
     }
   };
 
+  const handleExportiCal = async () => {
+    try {
+      const res = await fetch('/api/calendar/export');
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'music_planner.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to export calendar.');
+      console.error(err);
+    }
+  };
+
+  const handleGcalSync = async () => {
+    try {
+      const res = await fetch('/api/calendar/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Sync complete.');
+      } else {
+        alert(data.message || data.instructions || 'Sync not available yet.');
+      }
+    } catch (err) {
+      alert('Failed to sync to Google Calendar.');
+      console.error(err);
+    }
+  };
+
   const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
   const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
