@@ -26,8 +26,6 @@ export async function GET() {
       project = newProject;
     }
 
-    const syncThreshold = new Date();
-    syncThreshold.setMonth(syncThreshold.getMonth() - 1);
 
     const parsedEvents = [];
     const events = icsData.split('BEGIN:VEVENT');
@@ -63,13 +61,30 @@ export async function GET() {
         const startDate = parseICSDate(dtstartMatch[1]);
         const endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60*60*1000);
         
-        if (startDate < syncThreshold) continue;
+        const year = startDate.getFullYear();
+        if (year !== 2026 && year !== 2027) continue;
+
+        const isAllDay = dtstartMatch[1].length === 8;
+        const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
+        const hasRRule = block.includes('RRULE');
+        const isMotDue = title.toUpperCase().includes('MOT DUE');
+
+        if (isAllDay && (hasRRule || isMotDue)) continue;
+
+
+        let eventType = 'other';
+        const lowerTitle = title.toLowerCase();
+        if (lowerTitle.includes('rehearsal') || lowerTitle.includes('reh')) {
+            eventType = 'rehearsal';
+        } else if (lowerTitle.includes('concert') || lowerTitle.includes('performance') || lowerTitle.includes('show')) {
+            eventType = 'concert';
+        }
 
         parsedEvents.push({
             id: `gcal-${uidMatch[1].trim()}`,
             project_id: project!.id,
-            title: summaryMatch ? summaryMatch[1].trim() : 'Busy',
-            type: 'other',
+            title: title,
+            type: eventType,
             start_time: startDate.toISOString(),
             end_time: endDate.toISOString(),
             source: 'gcal',
