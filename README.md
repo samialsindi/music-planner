@@ -34,3 +34,10 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+---
+
+### Email to Calendar Ingestion
+You can forward emails directly into your Music Planner calendar! This works by using a free tier automation tool like Make.com to parse unstructured concert details via Groq's LLM API.
+
+**[See EMAIL_INGESTION.md for free setup instructions.](./EMAIL_INGESTION.md)**
