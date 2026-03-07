@@ -7,60 +7,12 @@ import { detectClashes } from '@/lib/clash';
 
 const localizer = momentLocalizer(moment);
 
-
-const CustomToolbar = (toolbar: any) => {
-  const goToBack = () => {
-    toolbar.onNavigate('PREV');
-  };
-
-  const goToNext = () => {
-    toolbar.onNavigate('NEXT');
-  };
-
-  const goToCurrent = () => {
-    toolbar.onNavigate('TODAY');
-  };
-
-  const label = () => {
-    const date = moment(toolbar.date);
-    return (
-      <span className="text-xl font-bold text-white">
-        {date.format('MMMM YYYY')}
-      </span>
-    );
-  };
-
-  return (
-    <div className="flex justify-between items-center mb-4 rbc-toolbar custom-toolbar">
-      <div className="flex gap-2">
-        <button className="px-3 py-1 rounded glass-panel hover:bg-white/10 transition-colors text-white" onClick={goToBack}>
-          &#8592;
-        </button>
-        <button className="px-3 py-1 rounded glass-panel hover:bg-white/10 transition-colors text-white" onClick={goToCurrent}>
-          Today
-        </button>
-        <button className="px-3 py-1 rounded glass-panel hover:bg-white/10 transition-colors text-white" onClick={goToNext}>
-          &#8594;
-        </button>
-      </div>
-      <div className="text-center">{label()}</div>
-      <div className="flex gap-2 invisible md:visible">
-        {/* Empty space to balance flex-between, or view toggles if we had them */}
-      </div>
-    </div>
-  );
-};
-
 export default function CalendarView() {
-
   const { events, projects, toggleEvent } = useAppStore();
   
-  // Create a map of active project IDs for quick lookup
-  const activeProjectIds = new Set(projects.filter(p => p.isActive).map(p => p.id));
-
   // Format events for react-big-calendar
   const calendarEvents = events
-    .filter(e => e.isToggled && activeProjectIds.has(e.projectId)) // Only show toggled events for active projects
+    .filter(e => e.isToggled) // Only show toggled events
     .map(e => ({
       id: e.id,
       title: e.title,
@@ -102,14 +54,8 @@ export default function CalendarView() {
   };
 
   return (
-    <div className="min-h-[600px] glass-panel p-4 md:p-6 mt-6 flex flex-col">
+    <div className="h-[600px] glass-panel p-6 mt-6">
       <Calendar
-        views={["month"]}
-        popup={true}
-        defaultView="month"
-        components={{
-          toolbar: CustomToolbar
-        }}
         localizer={localizer}
         events={calendarEvents}
         startAccessor="start"
@@ -122,7 +68,7 @@ export default function CalendarView() {
             toggleEvent(e.id);
           }
         }}
-        className="custom-calendar-theme flex-1 min-h-[500px]"
+        className="custom-calendar-theme"
       />
     </div>
   );

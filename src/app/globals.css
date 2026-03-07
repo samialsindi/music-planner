@@ -13,8 +13,8 @@
 
 html,
 body {
-
-
+  max-width: 100vw;
+  overflow-x: hidden;
   background-color: var(--background);
   color: var(--foreground);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -129,87 +129,4 @@ a {
   fill: #fff;
   font-weight: 600;
   font-size: 12px;
-}
-
-/* Additional Calendar Dark Mode Fixes */
-.rbc-time-content {
-  border-top: 1px solid var(--glass-border) !important;
-}
-.rbc-time-header-content {
-  border-left: 1px solid var(--glass-border) !important;
-}
-.rbc-timeslot-group {
-  border-bottom: 1px solid var(--glass-border) !important;
-}
-.rbc-day-slot .rbc-time-slot {
-  border-top: 1px solid var(--glass-border) !important;
-}
-.rbc-allday-cell {
-  background-color: rgba(255, 255, 255, 0.02) !important;
-  border-bottom: 1px solid var(--glass-border) !important;
-}
-.rbc-header + .rbc-header {
-  border-left: 1px solid var(--glass-border) !important;
-}
-.rbc-current-time-indicator {
-  background-color: var(--accent-light) !important;
-}
-.rbc-time-view .rbc-allday-cell {
-  background-color: rgba(255,255,255,0.05);
-}
-.rbc-event {
-  background-color: var(--accent) !important;
-  color: #fff !important;
-}
-.rbc-button-link {
-  color: #a8a2b5;
-}
-.rbc-month-row {
-  border-top: 1px solid var(--glass-border);
-}
-.rbc-month-view .rbc-header {
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.rbc-toolbar button {
-  color: var(--foreground) !important;
-  background-color: var(--glass-bg) !important;
-  border: 1px solid var(--glass-border) !important;
-}
-.rbc-toolbar button:active, .rbc-toolbar button.rbc-active {
-  background-color: var(--accent) !important;
-  color: white !important;
-}
-
-/* Fixes for Mobile Layout Constraints and Backgrounds */
-.rbc-off-range-bg {
-  background: var(--background) !important;
-  opacity: 0.5;
-}
-
-@media (max-width: 768px) {
-  .rbc-calendar {
-    font-size: 12px;
-  }
-  .rbc-toolbar {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start !important;
-  }
-  .rbc-toolbar-label {
-    margin: 4px 0 !important;
-  }
-  .h-\[600px\] {
-    height: 450px !important;
-  }
-}
-
-/* Additional fixes for calendar off-range dates */
-.rbc-month-view .rbc-off-range-bg {
-  background: rgba(0,0,0,0.5) !important;
-}
-
-/* Fix for gantt popup visibility issue, since gantt didn't load in playwright */
-.gantt .bar-label {
-  fill: #fff !important;
 }

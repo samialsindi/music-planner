@@ -87,7 +87,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 h-full">
+    <div className="flex gap-8 h-full">
       {/* Left Main Column: Visuals */}
       <div className="flex-1 flex flex-col gap-8 min-w-0">
         <header className="flex justify-between items-center glass-panel p-6">
@@ -143,7 +143,7 @@ export default function Home() {
       </div>
 
       {/* Right Sidebar Column: Toggles */}
-      <div className="w-full lg:w-[400px] shrink-0">
+      <div className="w-[400px] shrink-0">
         <ProjectToggles />
       </div>
     </div>
