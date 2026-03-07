@@ -121,7 +121,6 @@ export async function GET() {
             type: eventType,
             start_time: startDate.toISOString(),
             end_time: endDate.toISOString(),
-            is_all_day: isAllDay,
             status: 'approved',
             source: 'gcal',
             external_id: uidMatch[1].trim(),

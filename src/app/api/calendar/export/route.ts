@@ -43,17 +43,8 @@ export async function GET() {
       icsContent.push('BEGIN:VEVENT');
       icsContent.push(`UID:${event.id}@musicplanner`);
       icsContent.push(`DTSTAMP:${formatICSDate(now)}`);
-
-      if (event.is_all_day) {
-        icsContent.push(`DTSTART;VALUE=DATE:${formatICSAllDay(start)}`);
-        // For all day events, end date is exclusive (next day)
-        const nextDay = new Date(start);
-        nextDay.setDate(nextDay.getDate() + 1);
-        icsContent.push(`DTEND;VALUE=DATE:${formatICSAllDay(nextDay)}`);
-      } else {
-        icsContent.push(`DTSTART:${formatICSDate(start)}`);
-        icsContent.push(`DTEND:${formatICSDate(end)}`);
-      }
+      icsContent.push(`DTSTART:${formatICSDate(start)}`);
+      icsContent.push(`DTEND:${formatICSDate(end)}`);
 
       icsContent.push(`SUMMARY:${orchName} - ${projName} - ${event.title}`);
       if (event.inferred_notes) {
