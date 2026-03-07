@@ -8,15 +8,18 @@ export interface Clash {
   overlapMinutes: number;
 }
 
+import { EventTypeFilters } from './store';
+
 export function detectClashes(
   projects: Project[],
-  events: ProjectEvent[]
+  events: ProjectEvent[],
+  eventTypeFilters?: EventTypeFilters
 ): Clash[] {
   // Only look at events that are:
   // 1. Individually toggled ON
   // 2. Belong to a project that is toggled ON
   const activeEventIds = new Set(
-    events.filter(e => e.isToggled).map(e => e.id)
+    events.filter(e => e.isToggled && (!eventTypeFilters || eventTypeFilters[e.type as keyof typeof eventTypeFilters])).map(e => e.id)
   );
   
   const activeProjectIds = new Set(

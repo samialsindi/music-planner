@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type EventType = 'rehearsal' | 'concert' | 'other';
+export type EventType = 'rehearsal' | 'concert' | 'personal' | 'other';
 export type EventSource = 'manual' | 'gcal' | 'email';
 
 export interface ProjectEvent {
@@ -27,12 +27,21 @@ export interface Project {
   isActive: boolean; // High level toggle
 }
 
+export interface EventTypeFilters {
+  rehearsal: boolean;
+  concert: boolean;
+  personal: boolean;
+  other: boolean;
+}
+
 interface AppState {
+  eventTypeFilters: EventTypeFilters;
   projects: Project[];
   events: ProjectEvent[];
   
   // Actions
   toggleProject: (projectId: string) => void;
+  toggleEventType: (eventType: keyof EventTypeFilters) => void;
   toggleEvent: (eventId: string) => void;
   addEvent: (event: ProjectEvent) => void;
   setProjects: (projects: Project[]) => void;
@@ -41,11 +50,42 @@ interface AppState {
 
 // Temporary Mock Data
 const mockProjects: Project[] = [
+  { id: '3', name: 'BBC Chorus fnop', color: '#0ea5e9', isActive: true },
   { id: '1', name: 'Beethoven Symphony No. 9', color: '#6b21a8', isActive: true },
   { id: '2', name: 'Mozart Requiem', color: '#e11d48', isActive: true },
 ];
 
 const mockEvents: ProjectEvent[] = [
+  {
+    id: 'e3',
+    projectId: '3',
+    title: 'BBC Chorus fnop Rehearsal',
+    type: 'rehearsal',
+    startTime: new Date(new Date().setHours(14, 0, 0, 0)),
+    endTime: new Date(new Date().setHours(17, 0, 0, 0)),
+    source: 'manual',
+    isToggled: true,
+  },
+  {
+    id: 'e4',
+    projectId: '3',
+    title: 'BBC Chorus fnop Concert',
+    type: 'concert',
+    startTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(19, 30, 0, 0)),
+    endTime: new Date(new Date(new Date().setDate(new Date().getDate() + 2)).setHours(22, 0, 0, 0)),
+    source: 'manual',
+    isToggled: true,
+  },
+  {
+    id: 'e5',
+    projectId: '3',
+    title: 'Personal Practice',
+    type: 'personal',
+    startTime: new Date(new Date().setHours(10, 0, 0, 0)),
+    endTime: new Date(new Date().setHours(12, 0, 0, 0)),
+    source: 'manual',
+    isToggled: true,
+  },
   {
     id: 'e1',
     projectId: '1',
@@ -81,7 +121,21 @@ const mockEvents: ProjectEvent[] = [
 export const useAppStore = create<AppState>((set) => ({
   projects: mockProjects,
   events: mockEvents,
+  eventTypeFilters: {
+    rehearsal: true,
+    concert: true,
+    personal: true,
+    other: true,
+  },
   
+  toggleEventType: (eventType) =>
+    set((state) => ({
+      eventTypeFilters: {
+        ...state.eventTypeFilters,
+        [eventType]: !state.eventTypeFilters[eventType],
+      },
+    })),
+
   toggleProject: (projectId) =>
     set((state) => ({
       projects: state.projects.map((p) =>

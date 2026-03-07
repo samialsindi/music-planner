@@ -8,7 +8,7 @@ import 'frappe-gantt/dist/frappe-gantt.css';
 import moment from 'moment';
 
 export default function GanttView() {
-  const { events, projects } = useAppStore();
+  const { events, projects, eventTypeFilters } = useAppStore();
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
   const [viewMode, setViewMode] = useState<'Month' | 'Year'>('Year');
@@ -26,6 +26,7 @@ export default function GanttView() {
       // Get all future active events for this project
       const projectEvents = events.filter(
         e => e.projectId === project.id &&
+             eventTypeFilters[e.type as keyof typeof eventTypeFilters] &&
              e.isToggled &&
              moment(e.startTime).isSameOrAfter(today)
       );
@@ -72,7 +73,7 @@ export default function GanttView() {
         });
     }
 
-  }, [events, projects, viewMode]);
+  }, [events, projects, viewMode, eventTypeFilters]);
 
   return (
     <div className="flex flex-col gap-4">

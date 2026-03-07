@@ -8,11 +8,11 @@ import { detectClashes } from '@/lib/clash';
 const localizer = momentLocalizer(moment);
 
 export default function CalendarView() {
-  const { events, projects, toggleEvent } = useAppStore();
+  const { events, projects, toggleEvent, eventTypeFilters } = useAppStore();
   
   // Format events for react-big-calendar
   const calendarEvents = events
-    .filter(e => e.isToggled && projects.find(p => p.id === e.projectId)?.isActive) // Only show toggled events for active projects
+    .filter(e => e.isToggled && projects.find(p => p.id === e.projectId)?.isActive && eventTypeFilters[e.type as keyof typeof eventTypeFilters]) // Only show toggled events for active projects and allowed types
     .map(e => ({
       id: e.id,
       title: e.title,
@@ -22,7 +22,7 @@ export default function CalendarView() {
     }));
 
   // Run clash detection to highlight them uniquely in UI
-  const clashes = detectClashes(projects, events);
+  const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
     clashes.flatMap(c => [c.event1.id, c.event2.id])
   );
@@ -66,7 +66,7 @@ export default function CalendarView() {
         eventPropGetter={eventStyleGetter}
         onSelectEvent={(e: any) => {
           // Allow toggling entirely off from the calendar directly
-          if (confirm(`Hide "${e.title}" from your schedule?`)) {
+          if (confirm(`Decline just this event: "${e.title}"?`)) {
             toggleEvent(e.id);
           }
         }}

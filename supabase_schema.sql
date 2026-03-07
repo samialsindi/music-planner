@@ -14,7 +14,7 @@ CREATE TABLE events (
   id TEXT PRIMARY KEY, -- String ID to potentially match external GCal IDs easily
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  type TEXT CHECK (type IN ('rehearsal', 'concert', 'other')) DEFAULT 'rehearsal',
+  type TEXT CHECK (type IN ('rehearsal', 'concert', 'personal', 'other')) DEFAULT 'rehearsal',
   start_time TIMESTAMP WITH TIME ZONE NOT NULL,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   source TEXT CHECK (source IN ('manual', 'gcal', 'email')) DEFAULT 'manual',
