@@ -4,7 +4,25 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const url = process.env.GCAL_ICS_URL;
+  let url = process.env.GCAL_ICS_URL;
+
+  if (!url) {
+    // Try to find any env var that looks like a Google Calendar URL or has CAL/ICS in the name
+    const possibleKeys = Object.keys(process.env).filter(key =>
+      key.toUpperCase().includes('CAL') ||
+      key.toUpperCase().includes('ICS') ||
+      key.toUpperCase().includes('URL')
+    );
+
+    for (const key of possibleKeys) {
+      const val = process.env[key];
+      if (typeof val === 'string' && (val.includes('calendar.google.com') || val.endsWith('.ics'))) {
+        url = val;
+        break;
+      }
+    }
+  }
+
   if (!url) {
     return NextResponse.json({ error: 'Missing GCAL_ICS_URL env variable.' }, { status: 400 });
   }
@@ -94,7 +112,15 @@ export async function GET() {
     }
 
     if (parsedEvents.length > 0) {
-      const { error: upsertErr } = await supabase.from('events').upsert(parsedEvents, { onConflict: 'id' });
+      // Deduplicate events by id (keep the last one)
+      const uniqueEvents = Object.values(
+        parsedEvents.reduce((acc, event) => {
+          acc[event.id] = event;
+          return acc;
+        }, {})
+      );
+
+      const { error: upsertErr } = await supabase.from('events').upsert(uniqueEvents, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
     }
 
