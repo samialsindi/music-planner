@@ -10,9 +10,12 @@ const localizer = momentLocalizer(moment);
 export default function CalendarView() {
   const { events, projects, toggleEvent } = useAppStore();
   
+  // Create a map of active project IDs for quick lookup
+  const activeProjectIds = new Set(projects.filter(p => p.isActive).map(p => p.id));
+
   // Format events for react-big-calendar
   const calendarEvents = events
-    .filter(e => e.isToggled) // Only show toggled events
+    .filter(e => e.isToggled && activeProjectIds.has(e.projectId)) // Only show toggled events for active projects
     .map(e => ({
       id: e.id,
       title: e.title,
