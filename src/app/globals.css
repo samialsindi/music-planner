@@ -130,3 +130,19 @@ a {
   font-weight: 600;
   font-size: 12px;
 }
+.gantt .grid-background {
+  fill: transparent;
+}
+.gantt .grid-row {
+  fill: transparent;
+}
+.gantt .grid-row:nth-child(even) {
+  fill: rgba(255, 255, 255, 0.02);
+}
+.gantt .grid-header {
+  fill: rgba(0, 0, 0, 0.2);
+  stroke: var(--glass-border);
+}
+.gantt .tick {
+  stroke: var(--glass-border);
+}

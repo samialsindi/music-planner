@@ -105,22 +105,22 @@ export default function Home() {
     recognitionRef.current.start();
   };
 
-  const handleNewEventSimulation = async () => {
+
+  const handleSync = async () => {
     setIsProcessing(true);
-    // Simulate parsing an unstructured email stating a chorus rehearsal tonight
-    const mockEmail = "Hey, just confirming tonight's rehearsal is chorus only a cappella! See you at 8.";
-    
     try {
-      // Pick the second project (Mozart) to add it to just for demonstration
-      const newEvent = await parseEmailWithLLM(mockEmail, projects[1].id);
-      
-      // Artificial delay to feel like an API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      addEvent(newEvent);
-      alert(`Success! Parsed: ${newEvent.title}\nInferred: ${newEvent.inferredInstrumentation?.notes}`);
+      const response = await fetch('/api/sync');
+      const data = await response.json();
+      if (response.ok) {
+        alert(`Successfully synced ${data.count} events from Google Calendar.`);
+        // Reload page to reflect new events
+        window.location.reload();
+      } else {
+        alert(`Error syncing: ${data.error}`);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Sync error", err);
+      alert("Failed to sync with Google Calendar.");
     } finally {
       setIsProcessing(false);
     }
@@ -137,7 +137,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4">
             <button 
-              onClick={handleNewEventSimulation}
+              onClick={handleSync}
               disabled={isProcessing}
               className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
                 isProcessing 
@@ -145,9 +145,8 @@ export default function Home() {
                   : 'glass-panel text-gray-300 hover:text-white hover:bg-white/5'
               }`}
             >
-              Simulate Email
+              Sync Calendar
             </button>
-
             <button 
               onClick={toggleVoiceInput}
               disabled={isProcessing}
