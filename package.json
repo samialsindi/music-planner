@@ -10,16 +10,26 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "@types/react-big-calendar": "^1.16.3",
+    "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "frappe-gantt-react": "^0.2.2",
     "lucide-react": "^0.577.0",
+    "moment": "^2.30.1",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-big-calendar": "^1.19.4",
+    "react-dom": "19.2.3",
+    "tailwind-merge": "^3.5.0",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4"
+    "eslint-config-next": "^16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5.9.3"
   }
 }
