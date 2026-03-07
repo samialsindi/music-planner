@@ -1,6 +1,5 @@
 // Mock utility simulating what the Groq API will return.
 import { ProjectEvent } from './store';
-import { v4 as uuidv4 } from 'uuid'; // Need to add uuid
 
 export async function parseEmailWithLLM(emailText: string, projectId: string): Promise<ProjectEvent> {
   // In reality, we POST `emailText` to Groq API with a strict JSON schema prompt here.
