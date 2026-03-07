@@ -1,0 +1,24 @@
+
+> music-planner@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+
+✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+⚠ Duplicate page detected. src/app/page.js and src/app/page.tsx resolve to /
+⚠ Duplicate page detected. src/app/page.js and src/app/page.tsx resolve to /
+✓ Ready in 947ms
+○ Compiling / ...
+ GET / 200 in 5.2s (compile: 4.9s, render: 318ms)
+ GET / 200 in 90ms (compile: 5ms, render: 86ms)
+✓ Compiled in 1983ms
+Your app (or one of its dependencies) is using an outdated JSX transform. Update to the modern JSX transform for faster performance: https://react.dev/link/new-jsx-transform
+ GET / 200 in 1373ms (compile: 824ms, render: 549ms)
+ GET / 200 in 110ms (compile: 8ms, render: 102ms)
