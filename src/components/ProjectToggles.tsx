@@ -4,7 +4,33 @@ import { useAppStore } from '@/lib/store';
 import { detectClashes } from '@/lib/clash';
 import moment from 'moment';
 
+import { useState } from 'react';
+
 export default function ProjectToggles() {
+  const [classifyingProjectId, setClassifyingProjectId] = useState<string | null>(null);
+
+  const classifyProject = async (projectId: string) => {
+    setClassifyingProjectId(projectId);
+    try {
+      const res = await fetch('/api/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Classified ${data.count} events successfully.`);
+        window.location.reload();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (err) {
+      alert('Failed to classify events.');
+    } finally {
+      setClassifyingProjectId(null);
+    }
+  };
+
   const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
   const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
@@ -54,6 +80,13 @@ export default function ProjectToggles() {
               
               <div className="flex items-center justify-between mb-4 pl-4">
                 <h4 className="font-bold text-lg text-white">{project.name}</h4>
+                <button
+                  onClick={() => classifyProject(project.id)}
+                  disabled={classifyingProjectId === project.id}
+                  className="mr-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600/40"
+                >
+                  {classifyingProjectId === project.id ? 'AI...' : 'AI Classify'}
+                </button>
                 <button
                   onClick={() => toggleProject(project.id)}
                   className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
