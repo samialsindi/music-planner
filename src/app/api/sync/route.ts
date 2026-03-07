@@ -99,7 +99,7 @@ export async function GET() {
         }
 
         parsedEvents.push({
-            id: `gcal-${uidMatch[1].trim()}`,
+            id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
             project_id: project!.id,
             title: title,
             type: eventType,
@@ -113,12 +113,11 @@ export async function GET() {
 
     if (parsedEvents.length > 0) {
       // Deduplicate events by id (keep the last one)
-      const uniqueEvents = Object.values(
-        parsedEvents.reduce((acc, event) => {
-          acc[event.id] = event;
-          return acc;
-        }, {})
-      );
+      const uniqueEventsMap = new Map();
+      for (const event of parsedEvents) {
+        uniqueEventsMap.set(event.id, event);
+      }
+      const uniqueEvents = Array.from(uniqueEventsMap.values());
 
       const { error: upsertErr } = await supabase.from('events').upsert(uniqueEvents, { onConflict: 'id' });
       if (upsertErr) throw upsertErr;
