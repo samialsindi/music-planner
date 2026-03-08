@@ -65,6 +65,7 @@ export default function Home() {
           source: e.source,
           externalId: e.external_id,
           isToggled: e.is_toggled,
+          isDeclined: e.is_declined || false,
           isAllDay: e.is_all_day || false,
           status: e.status || 'approved',
           inferredInstrumentation: {

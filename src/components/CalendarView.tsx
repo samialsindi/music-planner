@@ -297,6 +297,20 @@ export default function CalendarView() {
                 Hide Event
               </button>
 
+              <button
+                onClick={async () => {
+                  const updated = { ...editingEvent.resource, isDeclined: !editingEvent.resource.isDeclined };
+                  useAppStore.getState().updateEvent(updated);
+                  setEditingEvent(null);
+                  const { createClient } = await import("@supabase/supabase-js");
+                  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "");
+                  await supabase.from("events").update({ is_declined: updated.isDeclined }).eq("id", updated.id);
+                }}
+                className="text-orange-400 text-sm font-medium hover:text-orange-300 transition-colors bg-orange-500/10 px-3 py-1.5 rounded"
+              >
+                {editingEvent.resource.isDeclined ? "Can Attend" : "Can't Attend"}
+              </button>
+
               <div className="flex gap-3">
                 <button 
                   onClick={() => setEditingEvent(null)} 
