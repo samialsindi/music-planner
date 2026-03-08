@@ -7,7 +7,39 @@
 - Network:       http://192.168.0.2:3000
 
 ✓ Starting...
-✓ Ready in 723ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+✓ Ready in 816ms
 ○ Compiling / ...
+⨯ ./src/app/page.tsx:228:9
+Ecmascript file had an error
+[0m [90m 226 |[39m
+ [90m 227 |[39m
+[31m[1m>[22m[39m[90m 228 |[39m   [36mconst[39m handleCleanUp [33m=[39m [36masync[39m () [33m=>[39m {
+ [90m     |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 229 |[39m     setIsProcessing([36mtrue[39m)[33m;[39m
+ [90m 230 |[39m     [36mtry[39m {
+ [90m 231 |[39m       [36mconst[39m { createClient } [33m=[39m [36mawait[39m [36mimport[39m([32m'@supabase/supabase-js'[39m)[33m;[39m[0m
+
+the name `handleCleanUp` is defined multiple times
+
+Import traces:
+  Client Component Browser:
+    ./src/app/page.tsx [Client Component Browser]
+    ./src/app/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./src/app/page.tsx [Client Component SSR]
+    ./src/app/page.tsx [Server Component]
+
+
+ GET / 500 in 9.7s (compile: 9.4s, render: 255ms)
+✓ Compiled in 90ms
 Your app (or one of its dependencies) is using an outdated JSX transform. Update to the modern JSX transform for faster performance: https://react.dev/link/new-jsx-transform
- GET / 200 in 8.8s (compile: 7.9s, render: 949ms)
+ GET / 200 in 988ms (compile: 269ms, render: 719ms)
+ GET /projects 200 in 927ms (compile: 782ms, render: 144ms)
+ GET / 200 in 113ms (compile: 6ms, render: 107ms)
+ GET /projects 200 in 93ms (compile: 5ms, render: 88ms)
