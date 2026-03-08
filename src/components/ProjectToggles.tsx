@@ -53,10 +53,10 @@ export default function ProjectToggles() {
 
   const handleGcalSync = async () => {
     try {
-      const res = await fetch('/api/calendar/sync', { method: 'POST' });
+      const res = await fetch('/api/sync');
       const data = await res.json();
       if (res.ok) {
-        alert(data.message || 'Sync complete.');
+        alert(data.message || `Sync complete. Synced ${data.count || 0} events.`);
       } else {
         alert(data.message || data.instructions || 'Sync not available yet.');
       }
