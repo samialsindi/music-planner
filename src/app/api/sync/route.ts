@@ -130,10 +130,17 @@ export async function GET() {
     }
 
     if (parsedEvents.length > 0) {
+      const colors = [
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', 
+        '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#f43f5e'
+      ];
+      let colorIdx = 0;
+      const getNextColor = () => colors[colorIdx++ % colors.length];
+
       // Create unique orchestrations
       const uniqueOrchNames = [...new Set(parsedEvents.map(e => e._orchName))];
       for (const name of uniqueOrchNames) {
-         await supabase.from('orchestras').insert({ name, color: '#4285F4' }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
+         await supabase.from('orchestras').insert({ name, color: getNextColor() }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
       }
       const { data: allOrchs } = await supabase.from('orchestras').select('id, name');
       const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
@@ -148,7 +155,7 @@ export async function GET() {
       for (const proj of uniqueProjs.values()) {
         const { data: existing } = await supabase.from('projects').select('id').eq('name', proj.name).eq('orchestra_id', proj.orchestra_id).maybeSingle();
         if (!existing) {
-           await supabase.from('projects').insert({ ...proj, color: '#4285F4' }).select().single();
+           await supabase.from('projects').insert({ ...proj, color: getNextColor() }).select().single();
         }
       }
 
