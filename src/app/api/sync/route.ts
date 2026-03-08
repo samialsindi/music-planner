@@ -43,6 +43,8 @@ export async function GET() {
 
         // Wipe the old monolithic Google Calendar project and its events
         await supabase.from('projects').delete().eq('name', 'Google Calendar');
+        await supabase.from('projects').delete().eq('name', 'Google Calendar Sync');
+        await supabase.from('orchestras').delete().eq('name', 'Google Calendar Sync');
 
         const parsedEvents: any[] = [];
         const events = icsData.split('BEGIN:VEVENT');
@@ -88,7 +90,8 @@ export async function GET() {
             }
 
             const year = startDate.getFullYear();
-            if (year !== 2026 && year !== 2027) continue;
+            const currentYear = new Date().getFullYear();
+            if (year < currentYear - 1 || year > currentYear + 3) continue;
             const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
             const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
             const isDailyRepeat = rruleMatch && rruleMatch[1].includes('FREQ=DAILY');
@@ -103,7 +106,7 @@ export async function GET() {
                 eventType = 'concert';
             }
 
-            let orchName = 'Google Calendar Sync';
+            let orchName = title.trim();
             let projName = title.trim();
             let eventTitle = title.trim();
 
@@ -116,6 +119,10 @@ export async function GET() {
                 orchName = parts[0];
                 projName = parts[0];
                 eventTitle = parts[1];
+            } else if (parts.length === 1) {
+                orchName = parts[0];
+                projName = parts[0];
+                eventTitle = parts[0];
             }
 
             const baseEvent = {
