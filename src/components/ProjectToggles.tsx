@@ -73,14 +73,14 @@ export default function ProjectToggles() {
   );
 
   return (
-    <div className="glass-panel p-6 mt-6 max-h-[600px] overflow-y-auto">
+    <div className="glass-panel p-6 pl-8 mt-6 max-h-[600px] overflow-y-auto">
       <h3 className="text-xl font-bold heading-gradient mb-4">Projects / Groups Control</h3>
       <p className="text-sm text-gray-400 mb-6">
         Toggle entire projects or granular rehearsals to see how it affects your clash schedule down to the minute.
       </p>
 
 
-      <div className="mb-6">
+      <div className="mb-6 pl-2">
         <h4 className="text-sm font-bold text-gray-300 mb-3 uppercase tracking-wider">Event Types</h4>
         <div className="flex flex-wrap gap-2">
           {(['rehearsal', 'concert', 'personal', 'other'] as const).map(type => (
@@ -116,7 +116,7 @@ export default function ProjectToggles() {
                 style={{ backgroundColor: project.color }} 
               />
               
-              <div className="flex items-center justify-between mb-4 pl-6 pr-2">
+              <div className="flex items-center justify-between mb-4 pl-8 pr-2">
                 <h4 className="font-bold text-lg text-white pr-4">{project.name}</h4>
                 <div className="flex shrink-0">
                   <button
@@ -141,7 +141,7 @@ export default function ProjectToggles() {
 
               {/* Sub-toggles for events if Project is ON */}
               {project.isActive && (
-                <div className="flex flex-col gap-2 pl-6 pr-2">
+                <div className="flex flex-col gap-2 pl-8 pr-2">
                   {projectEvents.map((e) => {
                     const isClashing = e.isToggled && clashingEventIds.has(e.id);
                     
