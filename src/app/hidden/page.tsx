@@ -4,7 +4,7 @@ import moment from 'moment';
 import ProjectToggles from '@/components/ProjectToggles';
 
 export default function HiddenPage() {
-  const { events, projects, settings, toggleProjectFilter, toggleEventFilter } = useAppStore();
+  const { events, projects, settings, toggleProject, toggleEvent } = useAppStore();
 
   const handleUnhideEvent = (eventId: string, isFromHiddenProject: boolean, projectId: string) => {
     if (isFromHiddenProject) {
@@ -12,22 +12,22 @@ export default function HiddenPage() {
       const projectEvents = events.filter(e => e && e.projectId === projectId);
 
       // 1. Unhide project (removes it from hiddenProjectIds)
-      toggleProjectFilter(projectId);
+      toggleProject(projectId);
 
       // 2. Hide all OTHER events in the project individually
       projectEvents.forEach(e => {
         if (e.id !== eventId && !settings.hiddenEventIds.includes(e.id)) {
-          toggleEventFilter(e.id);
+          toggleEvent(e.id);
         }
       });
     } else {
       // It's an individually hidden event, just unhide it
-      toggleEventFilter(eventId);
+      toggleEvent(eventId);
     }
   };
 
   const handleUnhideProject = (projectId: string) => {
-      toggleProjectFilter(projectId);
+      toggleProject(projectId);
   };
 
   const hiddenContent = () => {
