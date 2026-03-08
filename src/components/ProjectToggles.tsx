@@ -101,8 +101,11 @@ export default function ProjectToggles() {
 
       <div className="flex flex-col gap-6">
         {projects.map((project) => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
           const projectEvents = events
-            .filter((e) => e.projectId === project.id && eventTypeFilters[e.type as keyof typeof eventTypeFilters] && e.startTime >= new Date())
+            .filter((e) => e.projectId === project.id && eventTypeFilters[e.type as keyof typeof eventTypeFilters] && e.startTime >= today)
             .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
           return (

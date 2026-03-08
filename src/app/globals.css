@@ -174,15 +174,24 @@ a {
 .custom-gantt-theme .gantt .bar-wrapper .bar-label {
   fill: #fff;
 }
-.custom-gantt-theme .gantt .grid-background {
-  fill: var(--background);
+/* Force dark/transparent background on Gantt */
+.custom-gantt-theme,
+.custom-gantt-theme .gantt,
+.custom-gantt-theme svg,
+.custom-gantt-theme .grid-background,
+.custom-gantt-theme .grid-header,
+.custom-gantt-theme .grid-row,
+.custom-gantt-theme .tick {
+  background: transparent !important;
+  fill: transparent !important;
 }
 
-/* Force dark background on the Gantt SVG element itself */
-.custom-gantt-theme svg,
-.gantt svg {
-  background: var(--background) !important;
+/* Ensure text is visible and grid lines are subtle */
+.custom-gantt-theme .tick line,
+.custom-gantt-theme .grid-row-line {
+  stroke: rgba(255, 255, 255, 0.1) !important;
 }
-.gantt {
-  background: var(--background) !important;
+.custom-gantt-theme .tick text,
+.custom-gantt-theme .grid-header text {
+  fill: #9ca3af !important;
 }
