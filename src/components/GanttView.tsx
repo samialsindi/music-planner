@@ -1,4 +1,5 @@
 'use client';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useAppStore } from '@/lib/store';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,7 +9,14 @@ import moment from 'moment';
 import { detectClashes } from '@/lib/clash';
 
 export default function GanttView() {
-  const { events, projects, eventTypeFilters } = useAppStore();
+  const { events, projects, eventTypeFilters, settings, undoLastAction } = useAppStore();
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
+  const longPressProps = useLongPress((e: any) => {
+    if (e.touches) e.preventDefault();
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    setContextMenu({ x, y });
+  });
   const activeEventsList = events.filter(e => e.status !== 'pending');
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
@@ -20,12 +28,12 @@ export default function GanttView() {
     // Filter to only events from TODAY onwards (ignoring past)
     const today = moment().startOf('day');
 
-    const activeProjects = projects.filter(p => p.isActive);
+    const activeProjects = projects.filter(p => p && !settings.hiddenProjectIds.includes(p.id));
 
     const tasks = activeProjects.map(project => {
       // Get ALL events for this project to accurately draw the project timespan
       const allProjectEvents = events.filter(
-        e => e.projectId === project.id && e.isToggled
+        e => e.projectId === project.id && e && !settings.hiddenEventIds.includes(e.id)
       );
 
       return {
@@ -77,12 +85,18 @@ export default function GanttView() {
         view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month', 'Year'],
         view_mode: viewMode,
         on_click: function (task: any) {
+          const state = useAppStore.getState();
+          const clickedEvent = state.events.find(e => e.id === task.id);
+          if (clickedEvent) {
+             state.setCalendarDate(new Date(clickedEvent.startTime));
+             state.setCalendarView('week');
+          }
           const el = document.querySelector('.rbc-calendar');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         },
         custom_popup_html: function (task: any) {
           const state = useAppStore.getState();
-          const projectEvents = state.events.filter(e => e.projectId === task.id && e.isToggled);
+          const projectEvents = state.events.filter(e => e.projectId === task.id && e && !settings.hiddenEventIds.includes(e.id));
           const projectClashes = detectClashes(state.projects, state.events, state.eventTypeFilters);
           const clashingIds = new Set(projectClashes.flatMap(c => [c.event1.id, c.event2.id]));
           
@@ -147,7 +161,7 @@ export default function GanttView() {
         const projectTask = tasks.find(t => t.id === projectId);
         if (!projectTask) return;
 
-        const projEvents = events.filter(e => e.projectId === projectId && e.isToggled);
+        const projEvents = events.filter(e => e.projectId === projectId && e && !settings.hiddenEventIds.includes(e.id));
         if (projEvents.length === 0) return;
 
         const mainBar = wrapper.querySelector('.bar') as SVGRectElement;
@@ -375,7 +389,7 @@ export default function GanttView() {
 
     }, 150); // Small timeout to ensure Frappe Gantt has finished SVG rendering
 
-  }, [events, projects, viewMode, eventTypeFilters]);
+  }, [events, projects, viewMode, eventTypeFilters, settings.hiddenEventIds, settings.hiddenProjectIds]);
 
   return (
     <>
@@ -385,7 +399,7 @@ export default function GanttView() {
           .gantt-proj-${p.id} .bar-progress { fill: ${p.color} !important; opacity: 1; }
         `).join('')}
       `}</style>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" {...longPressProps} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }} onClick={() => setContextMenu(null)}>
 
         <div className="flex justify-end gap-2 mb-2">
           <button
@@ -413,6 +427,23 @@ export default function GanttView() {
              <div ref={ganttRef} className="w-full min-w-max"></div>
           </div>
         </div>
+      {contextMenu && (
+        <div
+          className="fixed z-[9999] bg-gray-900 border border-white/10 rounded-lg shadow-xl py-1"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+            onClick={async () => {
+              await undoLastAction();
+              setContextMenu(null);
+            }}
+          >
+            Undo Last Action
+          </button>
+        </div>
+      )}
       </div>
     </>
   );

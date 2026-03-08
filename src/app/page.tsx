@@ -9,7 +9,7 @@ import { parseEmailWithLLM } from '@/lib/llm';
 import PendingTab from '@/components/PendingTab';
 
 export default function Home() {
-  const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents } = useAppStore();
+  const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents, setSettings } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'pending'>('calendar');
   const pendingCount = events.filter(e => e.status === 'pending').length;
@@ -18,6 +18,16 @@ export default function Home() {
 
   useEffect(() => {
     async function fetchData() {
+      // Fetch user settings
+      const { data: settingsData, error: settingsErr } = await supabase.from('user_settings').select('*').eq('id', 1).maybeSingle();
+      if (!settingsErr && settingsData) {
+        setSettings({
+          hiddenProjectIds: settingsData.hidden_project_ids || [],
+          hiddenEventIds: settingsData.hidden_event_ids || [],
+          eventTypeFilters: settingsData.event_type_filters || { rehearsal: true, concert: true, personal: true, other: true }
+        });
+      }
+
       // Fetch orchestras
       const { data: orchData, error: orchErr } = await supabase.from('orchestras').select('*');
       if (!orchErr && orchData) {
@@ -67,7 +77,7 @@ export default function Home() {
       }
     }
     fetchData();
-  }, [setOrchestras, setProjects, setEvents]);
+  }, [setOrchestras, setProjects, setEvents, setSettings]);
 
   const processTextWithLLM = async (text: string) => {
     setIsProcessing(true);

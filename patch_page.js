@@ -1,45 +1,24 @@
 const fs = require('fs');
+const path = require('path');
 
-const path = 'src/app/page.tsx';
-let content = fs.readFileSync(path, 'utf8');
+const pagePath = path.join(__dirname, 'src', 'app', 'page.tsx');
+let content = fs.readFileSync(pagePath, 'utf8');
 
-content = content.replace(
-  'const { addEvent, projects, events, toggleEvent, setProjects, setEvents } = useAppStore();',
-  'const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents } = useAppStore();'
-);
+// We need to fetch the user_settings and initialize the store.
+content = content.replace(/const \{ addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents \} = useAppStore\(\);/, `const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents, setSettings } = useAppStore();`);
 
-content = content.replace(
-  '// Fetch projects',
-  `// Fetch orchestras
-      const { data: orchData, error: orchErr } = await supabase.from('orchestras').select('*');
-      if (!orchErr && orchData) {
-        const mappedOrchestras = orchData.map((o: any) => ({
-          id: o.id,
-          name: o.name,
-          color: o.color,
-          isActive: o.is_active
-        }));
-        setOrchestras(mappedOrchestras);
+content = content.replace(/useEffect\(\(\) => \{[\s\S]*?async function fetchData\(\) \{/, `useEffect(() => {
+    async function fetchData() {
+      // Fetch user settings
+      const { data: settingsData, error: settingsErr } = await supabase.from('user_settings').select('*').eq('id', 1).maybeSingle();
+      if (!settingsErr && settingsData) {
+        setSettings({
+          hiddenProjectIds: settingsData.hidden_project_ids || [],
+          hiddenEventIds: settingsData.hidden_event_ids || [],
+          eventTypeFilters: settingsData.event_type_filters || { rehearsal: true, concert: true, personal: true, other: true }
+        });
       }
+`);
 
-      // Fetch projects`
-);
-
-content = content.replace(
-  'id: p.id,',
-  'id: p.id, orchestraId: p.orchestra_id,'
-);
-
-content = content.replace(
-  'isToggled: e.is_toggled,',
-  `isToggled: e.is_toggled,
-          isAllDay: e.is_all_day || false,
-          status: e.status || 'approved',`
-);
-
-content = content.replace(
-  '[setProjects, setEvents]',
-  '[setOrchestras, setProjects, setEvents]'
-);
-
-fs.writeFileSync(path, content, 'utf8');
+fs.writeFileSync(pagePath, content);
+console.log('patched src/app/page.tsx');

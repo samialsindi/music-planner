@@ -66,7 +66,7 @@ export default function ProjectToggles() {
     }
   };
 
-  const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
+  const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType, settings } = useAppStore();
   const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
     clashes.flatMap(c => [c.event1.id, c.event2.id])
@@ -129,21 +129,21 @@ export default function ProjectToggles() {
                   <button
                     onClick={() => toggleProject(project.id)}
                     className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      project.isActive
+                      project && !settings.hiddenProjectIds.includes(project.id)
                         ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50'
                         : 'bg-gray-800 text-gray-500 border border-gray-700'
                     }`}
                   >
-                    {project.isActive ? 'ACTIVE (ON)' : 'MUTED (OFF)'}
+                    {project && !settings.hiddenProjectIds.includes(project.id) ? 'ACTIVE (ON)' : 'MUTED (OFF)'}
                   </button>
                 </div>
               </div>
 
               {/* Sub-toggles for events if Project is ON */}
-              {project.isActive && (
+              {project && !settings.hiddenProjectIds.includes(project.id) && (
                 <div className="flex flex-col gap-2 pl-8 pr-2">
                   {projectEvents.map((e) => {
-                    const isClashing = e.isToggled && clashingEventIds.has(e.id);
+                    const isClashing = e && !settings.hiddenEventIds.includes(e.id) && clashingEventIds.has(e.id);
                     
                     return (
                       <div 
@@ -187,11 +187,11 @@ export default function ProjectToggles() {
                         <button
                           onClick={() => toggleEvent(e.id)}
                           className={`ml-4 mt-1 w-10 h-5 rounded-full relative transition-colors ${
-                            e.isToggled ? 'bg-purple-600' : 'bg-gray-700'
+                            e && !settings.hiddenEventIds.includes(e.id) ? 'bg-purple-600' : 'bg-gray-700'
                           }`}
                         >
                           <div className={`absolute top-0.5 bottom-0.5 w-4 bg-white rounded-full transition-all shadow-md ${
-                            e.isToggled ? 'right-0.5' : 'left-0.5'
+                            e && !settings.hiddenEventIds.includes(e.id) ? 'right-0.5' : 'left-0.5'
                           }`} />
                         </button>
                       </div>
@@ -205,14 +205,14 @@ export default function ProjectToggles() {
       </div>
 
       {/* Hidden Events Section (Undo functionality) */}
-      {events.some(e => !e.isToggled) && (
+      {events.some(e => !e && !settings.hiddenEventIds.includes(e.id)) && (
         <div className="mt-4 mb-6 pt-4 border-t border-white/10">
           <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center justify-between">
             Hidden Events
-            <span className="bg-gray-800 text-xs px-2 py-0.5 rounded-full">{events.filter(e => !e.isToggled).length}</span>
+            <span className="bg-gray-800 text-xs px-2 py-0.5 rounded-full">{events.filter(e => !e && !settings.hiddenEventIds.includes(e.id)).length}</span>
           </h4>
           <div className="flex flex-col gap-2">
-            {events.filter(e => !e.isToggled).map(e => (
+            {events.filter(e => !e && !settings.hiddenEventIds.includes(e.id)).map(e => (
               <div key={e.id} className="flex items-center justify-between p-2 rounded bg-gray-900/50 border border-gray-800">
                 <div className="truncate pr-2">
                   <div className="text-xs font-medium text-gray-300 truncate">{e.title}</div>
