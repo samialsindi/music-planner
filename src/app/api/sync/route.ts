@@ -94,27 +94,27 @@ export async function GET() {
         }
 
         // Try to extract orchestra and project from title (e.g. "BBC Symph chorus / FNOP" or "NY Phil - Beethoven 9th - Rehearsal 1")
-        let orchName = 'Google Calendar Sync';
-        let projName = title.trim();
-        let eventTitle = title.trim();
 
         // Split by either a hyphen or a forward slash surrounded by optional spaces
         const parts = title.split(/\s*[-/]\s*/).filter(s => s.trim().length > 0);
         
+        let projectName = title.trim();
+        let eventTitle = title.trim();
+
         if (parts.length >= 3) {
-            orchName = parts[0];
-            projName = parts[1];
+            projectName = `${parts[0]} - ${parts[1]}`;
             eventTitle = parts.slice(2).join(' - ');
         } else if (parts.length === 2) {
-            orchName = parts[0];
-            projName = parts[0];
+            projectName = parts[0];
             eventTitle = parts[1];
+        } else if (parts.length === 1) {
+            projectName = parts[0];
+            eventTitle = parts[0];
         }
 
         parsedEvents.push({
             id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-            _orchName: orchName,
-            _projName: projName,
+            _projName: projectName,
             title: eventTitle,
             type: eventType,
             start_time: startDate.toISOString(),
@@ -135,41 +135,32 @@ export async function GET() {
       let colorIdx = 0;
       const getNextColor = () => colors[colorIdx++ % colors.length];
 
-      // Create unique orchestrations
-      const uniqueOrchNames = [...new Set(parsedEvents.map(e => e._orchName))];
-      for (const name of uniqueOrchNames) {
-         await supabase.from('orchestras').insert({ name, color: getNextColor() }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
-      }
-      const { data: allOrchs } = await supabase.from('orchestras').select('id, name');
-      const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
-
       // Create unique projects
-      const uniqueProjs = new Map(); // key: "orch_id-projName"
+      const uniqueProjs = new Map();
       for (const e of parsedEvents) {
-         const oId = orchMap.get(e._orchName);
-         if (oId) uniqueProjs.set(`${oId}-${e._projName}`, { orchestra_id: oId, name: e._projName });
+         if (e._projName) {
+            uniqueProjs.set(e._projName, { name: e._projName });
+         }
       }
 
       for (const proj of uniqueProjs.values()) {
-        const { data: existing } = await supabase.from('projects').select('id').eq('name', proj.name).eq('orchestra_id', proj.orchestra_id).maybeSingle();
+        const { data: existing } = await supabase.from('projects').select('id').eq('name', proj.name).maybeSingle();
         if (!existing) {
            await supabase.from('projects').insert({ ...proj, color: getNextColor() }).select().single();
         }
       }
 
-      const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id');
-      const projMap = new Map(allProjs?.map(p => [`${p.orchestra_id}-${p.name}`, p.id]) || []);
+      const { data: allProjs } = await supabase.from('projects').select('id, name');
+      const projMap = new Map(allProjs?.map(p => [p.name, p.id]) || []);
 
       // Map project_id back to events
       for (const e of parsedEvents) {
-         const oId = orchMap.get(e._orchName);
-         const pId = projMap.get(`${oId}-${e._projName}`);
+         const pId = projMap.get(e._projName);
          if (pId) {
              e.project_id = pId;
          } else {
              console.warn(`Could not find project ID for ${e._projName}`);
          }
-         delete e._orchName;
          delete e._projName;
       }
       
