@@ -9,7 +9,7 @@ import { parseEmailWithLLM } from '@/lib/llm';
 import PendingTab from '@/components/PendingTab';
 
 export default function Home() {
-  const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents, setSettings } = useAppStore();
+  const { addEvent, projects, events, orchestras, setOrchestras, setProjects, setEvents, setSettings, settings } = useAppStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'pending'>('calendar');
   const pendingCount = events.filter(e => e.status === 'pending').length;
