@@ -55,7 +55,7 @@ interface AppState {
   toggleOrchestra: (orchestraId: string) => void;
   toggleProject: (projectId: string) => void;
   toggleEventType: (eventType: keyof EventTypeFilters) => void;
-  toggleEvent: (eventId: string) => void;
+  toggleEvent: (eventId: string) => Promise<void>;
   addEvent: (event: ProjectEvent) => void;
   updateEvent: (event: ProjectEvent) => void;
   setOrchestras: (orchestras: Orchestra[]) => void;
@@ -96,12 +96,30 @@ export const useAppStore = create<AppState>((set) => ({
       ),
     })),
     
-  toggleEvent: (eventId) =>
+  toggleEvent: async (eventId) => {
+    // 1. Optimistic local update
     set((state) => ({
       events: state.events.map((e) =>
         e.id === eventId ? { ...e, isToggled: !e.isToggled } : e
       ),
-    })),
+    }));
+
+    // 2. Persist to Supabase
+    const { events } = useAppStore.getState();
+    const toggledEvent = events.find(e => e.id === eventId);
+    if (toggledEvent) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+      if (supabaseUrl && supabaseAnonKey) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        await supabase
+          .from('events')
+          .update({ is_toggled: toggledEvent.isToggled })
+          .eq('id', eventId);
+      }
+    }
+  },
     
   addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
   updateEvent: (updatedEvent) => set((state) => ({

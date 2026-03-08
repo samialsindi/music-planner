@@ -202,6 +202,33 @@ export default function ProjectToggles() {
         })}
       </div>
 
+      {/* Hidden Events Section (Undo functionality) */}
+      {events.some(e => !e.isToggled) && (
+        <div className="mt-4 mb-6 pt-4 border-t border-white/10">
+          <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center justify-between">
+            Hidden Events
+            <span className="bg-gray-800 text-xs px-2 py-0.5 rounded-full">{events.filter(e => !e.isToggled).length}</span>
+          </h4>
+          <div className="flex flex-col gap-2">
+            {events.filter(e => !e.isToggled).map(e => (
+              <div key={e.id} className="flex items-center justify-between p-2 rounded bg-gray-900/50 border border-gray-800">
+                <div className="truncate pr-2">
+                  <div className="text-xs font-medium text-gray-300 truncate">{e.title}</div>
+                  <div className="text-[10px] text-gray-500">{moment(e.startTime).format('MMM Do, h:mm a')}</div>
+                </div>
+                <button
+                  onClick={() => toggleEvent(e.id)}
+                  className="shrink-0 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs transition-colors border border-gray-700 flex items-center gap-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  Undo
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Settings & Export */}
       <div className="glass-panel p-6">
         <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
