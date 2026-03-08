@@ -37,23 +37,27 @@ export default function CalendarView() {
     const project = projects.find(p => p.id === event.resource.projectId);
     
     // Base style from project color, overridden if clashing
-    let backgroundColor = project?.color || '#3174ad';
-    let borderColor = 'transparent';
+    let backgroundColor = project?.color || '#6b21a8';
+    let borderColor = project?.color || 'transparent';
+    let opacity = 0.7;
     
     if (isClashing) {
       backgroundColor = 'var(--clash-red)';
       borderColor = '#fff';
+      opacity = 0.9;
     }
 
     return {
       style: {
         backgroundColor,
         borderColor,
-        borderRadius: '8px',
-        opacity: 0.9,
-        color: 'white',
+        borderRadius: '6px',
+        opacity,
+        color: '#ffffff',
         border: `1px solid ${borderColor}`,
+        borderLeft: `4px solid ${borderColor}`,
         display: 'block',
+        textShadow: '0 1px 2px rgba(0,0,0,0.8)'
       }
     };
   };
