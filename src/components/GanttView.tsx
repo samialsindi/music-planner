@@ -51,7 +51,11 @@ export default function GanttView() {
       };
     });
 
-    if (tasks.length === 0) return;
+    if (tasks.length === 0) {
+      if (ganttRef.current) ganttRef.current.innerHTML = '';
+      chartInstance.current = null;
+      return;
+    }
 
     if (chartInstance.current) {
         chartInstance.current.refresh(tasks);

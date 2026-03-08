@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex">
-        <aside className="hidden lg:flex w-64 glass-panel m-4 flex-col p-6 fixed h-[calc(100vh-2rem)] z-10 transition-all">
+        <aside className="hidden lg:flex w-64 glass-panel m-4 flex-col p-6 fixed h-[calc(100vh-2rem)] z-50 transition-all">
           <h1 className="text-2xl font-bold heading-gradient mb-8">Maestro</h1>
           
           <nav className="flex flex-col gap-4 flex-1">
@@ -52,7 +52,7 @@ export default function RootLayout({
           </footer>
         </aside>
 
-        <main className="flex-1 lg:ml-[calc(16rem+2rem)] p-4 lg:p-8 relative flex flex-col min-h-screen w-full">
+        <main className="flex-1 lg:ml-80 p-4 lg:p-8 relative flex flex-col min-h-screen min-w-0">
           <div className="flex-1 pb-24">
             {children}
           </div>

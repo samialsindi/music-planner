@@ -33,24 +33,32 @@ export default function ClashesPage() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-black/30 p-4 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div 
+                      className="p-4 rounded-lg border-l-4 border-y border-r border-white/5 shadow-md relative overflow-hidden"
+                      style={{ borderLeftColor: c.project1.color, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    >
+                      <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none" style={{ backgroundColor: c.project1.color }} />
+                      <div className="flex items-center gap-2 mb-2 relative z-10">
                         <div className="w-3 h-3 rounded-full" style={{backgroundColor: c.project1.color}} />
                         <span className="font-bold text-gray-200">{c.project1.name}</span>
                       </div>
-                      <h4 className="text-lg font-medium text-white mb-1">{c.event1.title}</h4>
-                      <p className="text-sm text-gray-400 font-mono">
+                      <h4 className="text-lg font-medium text-white mb-1 relative z-10">{c.event1.title}</h4>
+                      <p className="text-sm text-gray-400 font-mono relative z-10">
                         {moment(c.event1.startTime).format('h:mm a')} - {moment(c.event1.endTime).format('h:mm a')}
                       </p>
                     </div>
 
-                    <div className="bg-black/30 p-4 rounded-lg border border-white/5">
-                      <div className="flex items-center gap-2 mb-2">
+                    <div 
+                      className="p-4 rounded-lg border-l-4 border-y border-r border-white/5 shadow-md relative overflow-hidden"
+                      style={{ borderLeftColor: c.project2.color, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    >
+                      <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none" style={{ backgroundColor: c.project2.color }} />
+                      <div className="flex items-center gap-2 mb-2 relative z-10">
                         <div className="w-3 h-3 rounded-full" style={{backgroundColor: c.project2.color}} />
                         <span className="font-bold text-gray-200">{c.project2.name}</span>
                       </div>
-                      <h4 className="text-lg font-medium text-white mb-1">{c.event2.title}</h4>
-                      <p className="text-sm text-gray-400 font-mono">
+                      <h4 className="text-lg font-medium text-white mb-1 relative z-10">{c.event2.title}</h4>
+                      <p className="text-sm text-gray-400 font-mono relative z-10">
                         {moment(c.event2.startTime).format('h:mm a')} - {moment(c.event2.endTime).format('h:mm a')}
                       </p>
                     </div>

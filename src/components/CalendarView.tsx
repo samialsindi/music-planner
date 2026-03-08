@@ -1,14 +1,19 @@
 'use client';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { detectClashes } from '@/lib/clash';
 
 const localizer = momentLocalizer(moment);
+const DnDCalendar = withDragAndDrop(Calendar);
 
 export default function CalendarView() {
   const { events, projects, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
+  const [editingEvent, setEditingEvent] = useState<any>(null);
   
   // Format events for react-big-calendar
   const calendarEvents = events
@@ -53,11 +58,22 @@ export default function CalendarView() {
     };
   };
 
-  const minTime = new Date();
-  minTime.setHours(12, 0, 0); // Start at 12 PM
+  const { minTime, maxTime } = useMemo(() => {
+    const min = new Date();
+    min.setHours(12, 0, 0, 0); // Start at 12 PM
+    const max = new Date();
+    max.setHours(23, 59, 59, 999); // End at 12 AM
+    return { minTime: min, maxTime: max };
+  }, []);
 
-  const maxTime = new Date();
-  maxTime.setHours(23, 59, 59); // End at 12 AM
+  const onEventDrop = async ({ event, start, end }: any) => {
+    const updated = { ...event.resource, startTime: start, endTime: end };
+    useAppStore.getState().updateEvent(updated);
+    
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('events').update({ start_time: start.toISOString(), end_time: end.toISOString() }).eq('id', updated.id);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -80,40 +96,93 @@ export default function CalendarView() {
       </div>
 
       <div className="h-[600px] glass-panel p-6 relative">
-        <Calendar
+        <DnDCalendar
         localizer={localizer}
         popup={true}
         defaultView="month"
         events={calendarEvents}
-        startAccessor="start"
-        endAccessor="end"
+        startAccessor={(e: any) => e.start}
+        endAccessor={(e: any) => e.end}
         min={minTime}
         max={maxTime}
         tooltipAccessor={(e: any) => `${e.title} - ${e.resource.type}`}
         eventPropGetter={eventStyleGetter}
+        onEventDrop={onEventDrop}
+        onEventResize={onEventDrop}
+        resizable
         onSelectEvent={(e: any) => {
-          // Instantly hide the event
-          toggleEvent(e.id);
-          
-          // Show undo toast
-          import('react-hot-toast').then(({ toast }) => {
-            toast.success(`Removed "${e.title}"`, {
-              style: {
-                background: '#1f2937',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.1)',
-              },
-              iconTheme: { primary: '#10b981', secondary: '#1f2937' },
-              action: {
-                label: 'Undo',
-                onClick: () => toggleEvent(e.id),
-              },
-            } as any);
-          });
+          setEditingEvent(e);
         }}
         className="custom-calendar-theme"
       />
     </div>
+
+    {/* Event Edit Modal */}
+    {editingEvent && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-gray-900 border border-white/10 rounded-xl p-6 w-[400px] max-w-full shadow-2xl">
+          <h3 className="text-xl font-bold text-white mb-4">Edit Event</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">Title</label>
+              <input 
+                className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                value={editingEvent.title}
+                onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">Assign to Project</label>
+              <select 
+                className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                value={editingEvent.resource.projectId}
+                onChange={(e) => setEditingEvent({...editingEvent, resource: {...editingEvent.resource, projectId: e.target.value}})}
+              >
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="flex justify-between items-center mt-8 pt-4 border-t border-white/10">
+              <button 
+                onClick={() => {
+                  toggleEvent(editingEvent.id);
+                  setEditingEvent(null);
+                }}
+                className="text-red-400 text-sm font-medium hover:text-red-300 transition-colors bg-red-500/10 px-3 py-1.5 rounded"
+              >
+                Hide Event
+              </button>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setEditingEvent(null)} 
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white font-medium"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={async () => {
+                    const updated = { 
+                      ...editingEvent.resource, 
+                      projectId: editingEvent.resource.projectId,
+                      title: editingEvent.title 
+                    };
+                    useAppStore.getState().updateEvent(updated);
+                    setEditingEvent(null);
+                    
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+                    await supabase.from('events').update({ project_id: updated.projectId, title: updated.title }).eq('id', updated.id);
+                  }} 
+                  className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-500 rounded-lg text-white font-bold transition-all"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
