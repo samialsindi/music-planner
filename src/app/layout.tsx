@@ -15,6 +15,8 @@ export const viewport = {
   userScalable: false,
 };
 
+import { Toaster } from 'react-hot-toast';
+
 export default function RootLayout({
   children,
 }: {
@@ -56,6 +58,7 @@ export default function RootLayout({
           </div>
           <ClashFooter />
         </main>
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );

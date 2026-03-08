@@ -12,7 +12,7 @@ export default function GanttView() {
   const activeEventsList = events.filter(e => e.status !== 'pending');
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
-  const [viewMode, setViewMode] = useState<'Month' | 'Year'>('Year');
+  const [viewMode, setViewMode] = useState<'Month' | 'Year'>('Month');
 
   useEffect(() => {
     if (!ganttRef.current) return;
@@ -24,24 +24,21 @@ export default function GanttView() {
     const activeProjects = projects.filter(p => p.isActive);
 
     const tasks = activeProjects.map(project => {
-      // Get all future active events for this project
-      const projectEvents = events.filter(
-        e => e.projectId === project.id &&
-             eventTypeFilters[e.type as keyof typeof eventTypeFilters] &&
-             e.isToggled &&
-             moment(e.startTime).isSameOrAfter(today)
+      // Get ALL events for this project to accurately draw the project timespan
+      const allProjectEvents = events.filter(
+        e => e.projectId === project.id && e.isToggled
       );
 
-      // Default fallback if no future events exist
+      // Default fallback if no events exist at all
       let start = moment().format('YYYY-MM-DD');
       let end = moment().add(1, 'month').format('YYYY-MM-DD');
 
-      if (projectEvents.length > 0) {
+      if (allProjectEvents.length > 0) {
         // Sort chronologically
-        projectEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-        // The project "starts" at the first rehearsal and "ends" at the last concert
-        start = moment(projectEvents[0].startTime).format('YYYY-MM-DD');
-        end = moment(projectEvents[projectEvents.length - 1].endTime).format('YYYY-MM-DD');
+        allProjectEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+        // The project "starts" at the first event and "ends" at the last event
+        start = moment(allProjectEvents[0].startTime).format('YYYY-MM-DD');
+        end = moment(allProjectEvents[allProjectEvents.length - 1].endTime).format('YYYY-MM-DD');
       }
 
       return {

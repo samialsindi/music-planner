@@ -116,7 +116,7 @@ export default function ProjectToggles() {
                 style={{ backgroundColor: project.color }} 
               />
               
-              <div className="flex items-center justify-between mb-4 pl-4">
+              <div className="flex items-center justify-between mb-4 pl-6 pr-2">
                 <h4 className="font-bold text-lg text-white">{project.name}</h4>
                 <button
                   onClick={() => classifyProject(project.id)}
@@ -139,7 +139,7 @@ export default function ProjectToggles() {
 
               {/* Sub-toggles for events if Project is ON */}
               {project.isActive && (
-                <div className="flex flex-col gap-2 pl-4">
+                <div className="flex flex-col gap-2 pl-6 pr-2">
                   {projectEvents.map((e) => {
                     const isClashing = e.isToggled && clashingEventIds.has(e.id);
                     

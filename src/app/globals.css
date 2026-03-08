@@ -195,3 +195,8 @@ a {
 .custom-gantt-theme .grid-header text {
   fill: #9ca3af !important;
 }
+
+/* React Hot Toast Customizations */
+.go3958317564 {
+  font-family: var(--font-geist-sans), sans-serif;
+}
