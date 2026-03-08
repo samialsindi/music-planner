@@ -16,6 +16,7 @@ export interface ProjectEvent {
   source: EventSource;
   externalId?: string;
   isToggled: boolean; // For granular hide/show
+  isDeclined?: boolean; // Cross out "can't attend"
   inferredInstrumentation?: {
     timpaniRequired: boolean;
     percussionRequired: boolean;
@@ -244,7 +245,8 @@ addEvent: (event) => set((state) => ({ events: isEventValidDuration(event) ? [..
         title: prevEvent.title,
         project_id: prevEvent.projectId,
         start_time: prevEvent.startTime,
-        end_time: prevEvent.endTime
+        end_time: prevEvent.endTime,
+        is_declined: prevEvent.isDeclined
       }).eq('id', log.entity_id);
     }
 

@@ -304,6 +304,7 @@ export default function GanttView() {
 
           stickyGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           stickyGroup.setAttribute('class', 'sticky-header-group');
+          stickyGroup.style.zIndex = '9999'; // Ensure it's above other SVG elements
           // Important for z-index in SVG is just DOM order, so append last.
           svg.appendChild(stickyGroup);
 
@@ -370,7 +371,7 @@ export default function GanttView() {
              const svgGroup = document.querySelector('.sticky-header-group') as SVGGElement;
              if (svgGroup && scrollWrapper) {
                 // translateY needs to be an exact translation on the Y axis matching scrollTop
-                svgGroup.setAttribute('transform', `translate(0, ${scrollWrapper.scrollTop})`);
+                svgGroup.setAttribute('transform', `translate(0, ${Math.max(0, scrollWrapper.scrollTop - 2)})`);
              }
           };
 

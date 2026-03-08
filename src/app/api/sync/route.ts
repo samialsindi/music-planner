@@ -90,9 +90,9 @@ export async function GET() {
             if (year !== 2026 && year !== 2027) continue;
             const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
             const hasRRule = block.includes('RRULE');
+            const isDailyRepeat = block.includes('RRULE') && block.includes('FREQ=DAILY');
             const isMotDue = title.toUpperCase().includes('MOT DUE');
-
-            if (isAllDay && (hasRRule || isMotDue)) continue;
+            if (isAllDay && (isDailyRepeat || isMotDue)) continue;
 
 
             let eventType = 'other';
@@ -133,7 +133,8 @@ export async function GET() {
                 status: 'approved',
                 source: 'gcal',
                 external_id: uidMatch[1].trim(),
-                is_toggled: true
+                is_toggled: true,
+                is_declined: false
             });
         }
 
