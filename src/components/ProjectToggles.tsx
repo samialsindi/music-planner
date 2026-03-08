@@ -66,7 +66,7 @@ export default function ProjectToggles() {
     }
   };
 
-  const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType, settings } = useAppStore();
+  const { projects, events, toggleProject, toggleEvent, eventTypeFilters, toggleEventType, settings, orchestras } = useAppStore();
   const clashes = detectClashes(projects, events, eventTypeFilters);
   const clashingEventIds = new Set(
     clashes.flatMap(c => [c.event1.id, c.event2.id])
@@ -117,7 +117,9 @@ export default function ProjectToggles() {
               />
               
               <div className="flex items-center justify-between mb-4 pl-8 pr-2">
-                <h4 className="font-bold text-lg text-white pr-4">{project.name}</h4>
+                <h4 className="font-bold text-lg text-white pr-4">
+                  {orchestras.find(o => o.id === project.orchestraId)?.name} / {project.name}
+                </h4>
                 <div className="flex shrink-0">
                   <button
                     onClick={() => classifyProject(project.id)}
