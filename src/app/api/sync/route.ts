@@ -77,9 +77,10 @@ export async function GET() {
             let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
             if (isAllDay) {
-                // All-day events should end at 23:59:59 on the day they start, not spill into next day
-                endDate = new Date(startDate);
-                endDate.setHours(23, 59, 59, 999);
+                // All-day events in ICS have exclusive midnight end dates (e.g., 1 day event ends next day at 00:00).
+                // Subtracting 1 second makes it end at 23:59:59 on the correct final day, preventing UI spillover
+                // while preserving actual multi-day all-day events.
+                endDate = new Date(endDate.getTime() - 1000);
             }
 
             const year = startDate.getFullYear();

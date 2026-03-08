@@ -27,18 +27,21 @@ export default function CalendarView() {
           
           // Show undo toast
           import('react-hot-toast').then(({ toast }) => {
-            toast.success(`Removed "${props.event.title}"`, {
+            toast((t) => (
+              <span className="flex items-center gap-2">
+                Removed "{props.event.title}"
+                <button 
+                  onClick={() => { toggleEvent(props.event.id); toast.dismiss(t.id); }}
+                  className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs ml-2"
+                >
+                  Undo
+                </button>
+              </span>
+            ), {
               style: {
-                background: '#1f2937',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.1)',
-              },
-              iconTheme: { primary: '#10b981', secondary: '#1f2937' },
-              action: {
-                label: 'Undo',
-                onClick: () => toggleEvent(props.event.id),
-              },
-            } as any);
+                background: '#1f2937', color: '#fff', border: '1px solid rgba(255,255,255,0.1)',
+              }
+            });
           });
         }}
       >
@@ -55,6 +58,7 @@ export default function CalendarView() {
       title: e.title,
       start: new Date(e.startTime),
       end: new Date(e.endTime),
+      allDay: e.isAllDay,
       resource: e,
     }));
 

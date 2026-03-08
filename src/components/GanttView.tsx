@@ -48,7 +48,17 @@ export default function GanttView() {
       };
     });
 
-    if (tasks.length === 0) {
+    // Add a ghost task spanning a large time range to ensure the Gantt always fills screen width L-R
+    tasks.push({
+      id: 'ghost-boundary',
+      name: '',
+      start: moment().subtract(1, 'month').format('YYYY-MM-DD'),
+      end: moment().add(3, 'year').format('YYYY-MM-DD'),
+      progress: 0,
+      custom_class: 'hidden-ghost-task'
+    });
+
+    if (tasks.filter(t => t.id !== 'ghost-boundary').length === 0) {
       if (ganttRef.current) ganttRef.current.innerHTML = '';
       chartInstance.current = null;
       return;
@@ -242,6 +252,65 @@ export default function GanttView() {
         }
       }
 
+      // Auto-scroll to "Today" to clamp view left-alignment
+      const scrollWrapper = document.querySelector('.gantt-scroll-wrapper') as HTMLElement;
+      const todayLine = document.querySelector('.gantt .today-highlight');
+      if (scrollWrapper && todayLine) {
+        const xPos = parseFloat(todayLine.getAttribute('x') || '0');
+        // Scroll so today is 20px from the left edge
+        scrollWrapper.scrollLeft = Math.max(0, xPos - 20);
+      }
+
+      // Implement Freeze-Pane Sticky Header 
+      const svg = document.querySelector('.gantt svg');
+      if (svg && scrollWrapper) {
+          let stickyGroup = svg.querySelector('.sticky-header-group') as SVGGElement;
+          if (!stickyGroup) {
+              stickyGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+              stickyGroup.setAttribute('class', 'sticky-header-group');
+              svg.appendChild(stickyGroup); // Append to very end so it has highest Z-index over bars
+
+              // Add the semi-transparent black header background
+              const gridHeaderBg = document.querySelector('.gantt .grid-header');
+              if (gridHeaderBg) {
+                  stickyGroup.appendChild(gridHeaderBg);
+              }
+
+              // Extract all text labels from the ticks and copy them into the sticky group
+              const ticks = document.querySelectorAll('.gantt .tick');
+              ticks.forEach(tick => {
+                  const upper = tick.querySelector('.upper-text');
+                  const lower = tick.querySelector('.lower-text');
+                  const transform = tick.getAttribute('transform');
+                  
+                  if (upper) {
+                      const clonedUpper = upper.cloneNode(true) as SVGTextElement;
+                      if (transform) clonedUpper.setAttribute('transform', transform);
+                      stickyGroup.appendChild(clonedUpper);
+                      upper.setAttribute('visibility', 'hidden');
+                  }
+                  if (lower) {
+                      const clonedLower = lower.cloneNode(true) as SVGTextElement;
+                      if (transform) clonedLower.setAttribute('transform', transform);
+                      stickyGroup.appendChild(clonedLower);
+                      lower.setAttribute('visibility', 'hidden');
+                  }
+              });
+          }
+
+          // Attach scroll sync listener
+          const handleScroll = () => {
+             if (stickyGroup) {
+                // translate down according to vertical scroll 
+                stickyGroup.style.transform = `translateY(${scrollWrapper.scrollTop}px)`;
+             }
+          };
+          scrollWrapper.addEventListener('scroll', handleScroll);
+          
+          // Trigger once immediately
+          handleScroll();
+      }
+
     }, 150); // Small timeout to ensure Frappe Gantt has finished SVG rendering
 
   }, [events, projects, viewMode, eventTypeFilters]);
@@ -278,7 +347,7 @@ export default function GanttView() {
         </div>
 
         <div className="glass-panel p-0 overflow-hidden custom-gantt-theme">
-          <div className="w-full max-h-[600px] overflow-y-auto overflow-x-auto relative">
+          <div className="w-full max-h-[600px] overflow-y-auto overflow-x-auto relative gantt-scroll-wrapper">
              <div ref={ganttRef} className="w-full min-w-max"></div>
           </div>
         </div>
