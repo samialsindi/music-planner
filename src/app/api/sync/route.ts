@@ -37,13 +37,8 @@ export async function GET() {
     if (!response.ok) throw new Error("Failed to fetch ICS file");
     const icsData = await response.text();
 
-    let { data: project } = await supabase.from('projects').select('id').eq('name', 'Google Calendar').maybeSingle();
-    if (!project) {
-      const { data: newProject, error: projErr } = await supabase.from('projects').insert({ name: 'Google Calendar', color: '#4285F4' }).select().single();
-      if (projErr) throw projErr;
-      project = newProject;
-    }
-
+    // Wipe the old monolithic Google Calendar project and its events
+    await supabase.from('projects').delete().eq('name', 'Google Calendar');
 
     const parsedEvents: any[] = [];
     const events = icsData.split('BEGIN:VEVENT');
@@ -98,18 +93,21 @@ export async function GET() {
             eventType = 'concert';
         }
 
-        // Try to extract orchestra and project from title (e.g. "NY Phil - Beethoven 9th - Rehearsal 1")
-        let orchName = 'Imported Calendar';
-        let projName = 'Imported Events';
-        let eventTitle = title;
+        // Try to extract orchestra and project from title (e.g. "BBC Symph chorus / FNOP" or "NY Phil - Beethoven 9th - Rehearsal 1")
+        let orchName = 'Google Calendar Sync';
+        let projName = title.trim();
+        let eventTitle = title.trim();
 
-        const parts = title.split(' - ').map(s => s.trim());
+        // Split by either a hyphen or a forward slash surrounded by optional spaces
+        const parts = title.split(/\s*[-/]\s*/).filter(s => s.trim().length > 0);
+        
         if (parts.length >= 3) {
             orchName = parts[0];
             projName = parts[1];
             eventTitle = parts.slice(2).join(' - ');
         } else if (parts.length === 2) {
             orchName = parts[0];
+            projName = parts[0];
             eventTitle = parts[1];
         }
 
@@ -166,14 +164,21 @@ export async function GET() {
       for (const e of parsedEvents) {
          const oId = orchMap.get(e._orchName);
          const pId = projMap.get(`${oId}-${e._projName}`);
-         e.project_id = pId || project!.id; // fallback to generic GCal project
+         if (pId) {
+             e.project_id = pId;
+         } else {
+             console.warn(`Could not find project ID for ${e._projName}`);
+         }
          delete e._orchName;
          delete e._projName;
       }
+      
+      // Filter out any events that failed to map
+      const validEvents = parsedEvents.filter(e => e.project_id);
 
       // Deduplicate
       const uniqueEventsMap = new Map();
-      for (const event of parsedEvents) {
+      for (const event of validEvents) {
         uniqueEventsMap.set(event.id, event);
       }
       const uniqueEvents = Array.from(uniqueEventsMap.values());

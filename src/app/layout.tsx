@@ -52,7 +52,10 @@ export default function RootLayout({
           </footer>
         </aside>
 
-        <main className="flex-1 lg:ml-80 p-4 lg:p-8 relative flex flex-col min-h-screen min-w-0">
+        {/* Bulletproof CSS Spacer for Fixed Sidebar */}
+        <div className="hidden lg:block w-[18rem] flex-shrink-0" aria-hidden="true"></div>
+
+        <main className="flex-1 p-4 lg:p-8 relative flex flex-col min-h-screen min-w-0">
           <div className="flex-1 pb-24">
             {children}
           </div>

@@ -14,6 +14,38 @@ const DnDCalendar = withDragAndDrop(Calendar);
 export default function CalendarView() {
   const { events, projects, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
   const [editingEvent, setEditingEvent] = useState<any>(null);
+
+  const CustomEventComponent = (props: any) => {
+    return (
+      <div 
+        className="w-full h-full"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // Instantly hide the event on right click
+          toggleEvent(props.event.id);
+          
+          // Show undo toast
+          import('react-hot-toast').then(({ toast }) => {
+            toast.success(`Removed "${props.event.title}"`, {
+              style: {
+                background: '#1f2937',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.1)',
+              },
+              iconTheme: { primary: '#10b981', secondary: '#1f2937' },
+              action: {
+                label: 'Undo',
+                onClick: () => toggleEvent(props.event.id),
+              },
+            } as any);
+          });
+        }}
+      >
+        {props.title}
+      </div>
+    );
+  };
   
   // Format events for react-big-calendar
   const calendarEvents = events
@@ -111,6 +143,9 @@ export default function CalendarView() {
         max={maxTime}
         tooltipAccessor={(e: any) => `${e.title} - ${e.resource.type}`}
         eventPropGetter={eventStyleGetter}
+        components={{
+          event: CustomEventComponent
+        }}
         onEventDrop={onEventDrop}
         onEventResize={onEventDrop}
         resizable
