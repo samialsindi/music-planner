@@ -51,7 +51,15 @@ export interface EventTypeFilters {
   other: boolean;
 }
 
+
+export const isEventValidDuration = (event: ProjectEvent): boolean => {
+  if (!event || !event.startTime || !event.endTime) return false;
+  const durationMs = new Date(event.endTime).getTime() - new Date(event.startTime).getTime();
+  return durationMs > 30 * 60 * 1000;
+};
+
 interface AppState {
+
   settings: UserSettings;
   eventTypeFilters: EventTypeFilters;
   orchestras: Orchestra[];
@@ -156,7 +164,7 @@ toggleEvent: async (eventId) => {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
     await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
   },
-addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
+addEvent: (event) => set((state) => ({ events: isEventValidDuration(event) ? [...state.events, event] : state.events })),
   updateEvent: async (updatedEvent) => {
     const { events } = get();
     const oldEvent = events.find(e => e.id === updatedEvent.id);
@@ -164,11 +172,17 @@ addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
       const { logAction } = await import('./audit');
       await logAction('UPDATE_EVENT', updatedEvent.id, oldEvent, updatedEvent);
     }
-    set((state) => ({ events: state.events.map(e => e.id === updatedEvent.id ? updatedEvent : e) }));
+    set((state) => {
+      if (isEventValidDuration(updatedEvent)) {
+        return { events: state.events.map(e => e.id === updatedEvent.id ? updatedEvent : e) };
+      } else {
+        return { events: state.events.filter(e => e.id !== updatedEvent.id) };
+      }
+    });
   },
   setOrchestras: (orchestras) => set({ orchestras }),
   setProjects: (projects) => set({ projects }),
-  setEvents: (events) => set({ events }),
+  setEvents: (events) => set({ events: events.filter(isEventValidDuration) }),
   undoLastAction: async () => {
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
@@ -212,9 +226,19 @@ addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
     } else if (log.action_type === 'UPDATE_EVENT') {
       const prevEvent = log.previous_state;
       // Revert in local state
-      set((state) => ({
-        events: state.events.map(e => e.id === log.entity_id ? prevEvent : e)
-      }));
+      set((state) => {
+        if (isEventValidDuration(prevEvent)) {
+          // It might not exist in the state if it was removed for being too short when updated
+          const exists = state.events.some(e => e.id === log.entity_id);
+          if (exists) {
+            return { events: state.events.map(e => e.id === log.entity_id ? prevEvent : e) };
+          } else {
+            return { events: [...state.events, prevEvent] };
+          }
+        } else {
+          return { events: state.events.filter(e => e.id !== log.entity_id) };
+        }
+      });
       // Revert in DB
       await supabase.from('events').update({
         title: prevEvent.title,
