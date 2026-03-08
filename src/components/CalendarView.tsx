@@ -95,6 +95,14 @@ export default function CalendarView() {
       borderLeft = `4px solid #fff`;
     }
 
+    // If the event is marked "Can't Attend", strike it out visually
+    if (event.resource && event.resource.isDeclined) {
+      textDecoration = 'line-through';
+      opacity = 0.4;
+      backgroundColor = 'rgba(75, 85, 99, 0.4)'; // Gray out declined events
+      borderColor = 'var(--clash-red)';
+    }
+
     // Cross out target when user clicks a clash in Gantt View
     if (selectedClashEventId) {
       const selectedEvent = events.find(e => e.id === selectedClashEventId);
@@ -309,6 +317,57 @@ export default function CalendarView() {
                 className="text-orange-400 text-sm font-medium hover:text-orange-300 transition-colors bg-orange-500/10 px-3 py-1.5 rounded"
               >
                 {editingEvent.resource.isDeclined ? "Can Attend" : "Can't Attend"}
+              </button>
+
+              <button
+                onClick={async () => {
+                  const { createClient } = await import("@supabase/supabase-js");
+                  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "");
+
+                  // 1. Get or Create "Personal" Orchestra
+                  let orchId = '';
+                  const { data: orchs } = await supabase.from('orchestras').select('id, name').eq('name', 'Personal').maybeSingle();
+                  if (orchs) {
+                      orchId = orchs.id;
+                  } else {
+                      const { data: newOrch } = await supabase.from('orchestras').insert({ name: 'Personal', color: '#64748b' }).select().single();
+                      if (newOrch) {
+                        orchId = newOrch.id;
+                        useAppStore.getState().setOrchestras([...useAppStore.getState().orchestras, { id: newOrch.id, name: 'Personal', color: '#64748b', isActive: true }]);
+                      }
+                  }
+
+                  // 2. Get or Create "Personal Events" Project
+                  let projId = '';
+                  const { data: projs } = await supabase.from('projects').select('id, name').eq('name', 'Personal Events').eq('orchestra_id', orchId).maybeSingle();
+                  if (projs) {
+                      projId = projs.id;
+                  } else {
+                      const { data: newProj } = await supabase.from('projects').insert({ name: 'Personal Events', orchestra_id: orchId, color: '#64748b' }).select().single();
+                      if (newProj) {
+                        projId = newProj.id;
+                        useAppStore.getState().setProjects([...useAppStore.getState().projects, { id: newProj.id, name: 'Personal Events', orchestraId: orchId, color: '#64748b', isActive: true }]);
+                      }
+                  }
+
+                  // 3. Update the Event
+                  const updated = {
+                    ...editingEvent.resource,
+                    projectId: projId,
+                    type: 'personal',
+                    title: editingEvent.title
+                  };
+                  useAppStore.getState().updateEvent(updated);
+                  setEditingEvent(null);
+                  await supabase.from("events").update({
+                    project_id: projId,
+                    type: 'personal',
+                    title: editingEvent.title
+                  }).eq("id", updated.id);
+                }}
+                className="text-slate-300 text-sm font-medium hover:text-slate-200 transition-colors bg-slate-500/20 px-3 py-1.5 rounded"
+              >
+                Mark Personal
               </button>
 
               <div className="flex gap-3">

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { rrulestr } from 'rrule';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,11 +90,10 @@ export async function GET() {
             const year = startDate.getFullYear();
             if (year !== 2026 && year !== 2027) continue;
             const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
-            const hasRRule = block.includes('RRULE');
-            const isDailyRepeat = block.includes('RRULE') && block.includes('FREQ=DAILY');
+            const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
+            const isDailyRepeat = rruleMatch && rruleMatch[1].includes('FREQ=DAILY');
             const isMotDue = title.toUpperCase().includes('MOT DUE');
             if (isAllDay && (isDailyRepeat || isMotDue)) continue;
-
 
             let eventType = 'other';
             const lowerTitle = title.toLowerCase();
@@ -103,14 +103,11 @@ export async function GET() {
                 eventType = 'concert';
             }
 
-            // Try to extract orchestra and project from title (e.g. "BBC Symph chorus / FNOP" or "NY Phil - Beethoven 9th - Rehearsal 1")
             let orchName = 'Google Calendar Sync';
             let projName = title.trim();
             let eventTitle = title.trim();
 
-            // Split by either a hyphen or a forward slash surrounded by optional spaces
             const parts = title.split(/\s*[-/]\s*/).filter(s => s.trim().length > 0);
-
             if (parts.length >= 3) {
                 orchName = parts[0];
                 projName = parts[1];
@@ -121,21 +118,60 @@ export async function GET() {
                 eventTitle = parts[1];
             }
 
-            parsedEvents.push({
-                id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
+            const baseEvent = {
                 _orchName: orchName,
                 _projName: projName,
                 title: eventTitle,
                 type: eventType,
-                start_time: startDate.toISOString(),
-                end_time: endDate.toISOString(),
                 is_all_day: isAllDay,
                 status: 'approved',
                 source: 'gcal',
                 external_id: uidMatch[1].trim(),
                 is_toggled: true,
                 is_declined: false
-            });
+            };
+
+            const duration = endDate.getTime() - startDate.getTime();
+
+            if (rruleMatch) {
+                try {
+                    // Extract exact string without trailing carriage return
+                    const rruleStr = rruleMatch[1].trim();
+                    // Setup rrule with the start date (ignoring timezone issues by relying on rrule's string parsing)
+                    const rule = rrulestr(`DTSTART:${dtstartMatch[1].trim()}\nRRULE:${rruleStr}`);
+
+                    // Generate occurrences until end of 2027
+                    const untilDate = new Date('2027-12-31T23:59:59Z');
+                    const occurrences = rule.between(startDate, untilDate, true);
+
+                    for (let j = 0; j < occurrences.length; j++) {
+                        const occStart = occurrences[j];
+                        const occEnd = new Date(occStart.getTime() + duration);
+                        parsedEvents.push({
+                            ...baseEvent,
+                            id: `gcal-${uidMatch[1].trim()}-${j}`.toLowerCase(),
+                            start_time: occStart.toISOString(),
+                            end_time: occEnd.toISOString()
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing RRULE for event:', title, e);
+                    // Fallback to single event
+                    parsedEvents.push({
+                        ...baseEvent,
+                        id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
+                        start_time: startDate.toISOString(),
+                        end_time: endDate.toISOString()
+                    });
+                }
+            } else {
+                parsedEvents.push({
+                    ...baseEvent,
+                    id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
+                    start_time: startDate.toISOString(),
+                    end_time: endDate.toISOString()
+                });
+            }
         }
 
         if (parsedEvents.length > 0) {
