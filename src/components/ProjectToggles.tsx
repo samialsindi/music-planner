@@ -117,24 +117,26 @@ export default function ProjectToggles() {
               />
               
               <div className="flex items-center justify-between mb-4 pl-6 pr-2">
-                <h4 className="font-bold text-lg text-white">{project.name}</h4>
-                <button
-                  onClick={() => classifyProject(project.id)}
-                  disabled={classifyingProjectId === project.id}
-                  className="mr-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600/40"
-                >
-                  {classifyingProjectId === project.id ? 'AI...' : 'AI Classify'}
-                </button>
-                <button
-                  onClick={() => toggleProject(project.id)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                    project.isActive
-                      ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50'
-                      : 'bg-gray-800 text-gray-500 border border-gray-700'
-                  }`}
-                >
-                  {project.isActive ? 'ACTIVE (ON)' : 'MUTED (OFF)'}
-                </button>
+                <h4 className="font-bold text-lg text-white pr-4">{project.name}</h4>
+                <div className="flex shrink-0">
+                  <button
+                    onClick={() => classifyProject(project.id)}
+                    disabled={classifyingProjectId === project.id}
+                    className="mr-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600/40"
+                  >
+                    {classifyingProjectId === project.id ? 'AI...' : 'AI Classify'}
+                  </button>
+                  <button
+                    onClick={() => toggleProject(project.id)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      project.isActive
+                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/50'
+                        : 'bg-gray-800 text-gray-500 border border-gray-700'
+                    }`}
+                  >
+                    {project.isActive ? 'ACTIVE (ON)' : 'MUTED (OFF)'}
+                  </button>
+                </div>
               </div>
 
               {/* Sub-toggles for events if Project is ON */}

@@ -2,20 +2,17 @@
 import { useAppStore } from '@/lib/store';
 import { useEffect, useRef, useState } from 'react';
 
-// Using standard Frappe Gantt via dynamic import to avoid SSR issues
 import Gantt from 'frappe-gantt';
 import 'frappe-gantt/dist/frappe-gantt.css';
 import moment from 'moment';
+import { detectClashes } from '@/lib/clash';
 
 export default function GanttView() {
-  const { events, projects, eventTypeFilters, toggleProject } = useAppStore();
+  const { events, projects, eventTypeFilters } = useAppStore();
   const activeEventsList = events.filter(e => e.status !== 'pending');
   const ganttRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<any>(null);
-  const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month' | 'Year'>('Month');
-
-  // Compute intervals for the SVG gradients
-  const activeProjects = projects.filter(p => p.isActive);
+  const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month' | 'Year'>('Week');
 
   useEffect(() => {
     if (!ganttRef.current) return;
@@ -23,22 +20,21 @@ export default function GanttView() {
     // Filter to only events from TODAY onwards (ignoring past)
     const today = moment().startOf('day');
 
+    const activeProjects = projects.filter(p => p.isActive);
+
     const tasks = activeProjects.map(project => {
       // Get ALL events for this project to accurately draw the project timespan
       const allProjectEvents = events.filter(
         e => e.projectId === project.id && e.isToggled
       );
 
-      // Default fallback if no events exist at all
       let start = moment().format('YYYY-MM-DD');
       let end = moment().add(1, 'month').format('YYYY-MM-DD');
 
       if (allProjectEvents.length > 0) {
-        // Sort chronologically
         allProjectEvents.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
-        // The project "starts" at the first event and "ends" at the last event
-        // To make the bar look good, padding by a small margin isn't strictly necessary but Frappe Gantt does better with discrete days
-        start = moment(allProjectEvents[0].startTime).format('YYYY-MM-DD');
+        const actualStart = moment(allProjectEvents[0].startTime);
+        start = (actualStart.isBefore(today) ? today : actualStart).format('YYYY-MM-DD');
         end = moment(allProjectEvents[allProjectEvents.length - 1].endTime).format('YYYY-MM-DD');
       }
 
@@ -47,13 +43,10 @@ export default function GanttView() {
         name: project.name,
         start,
         end,
-        progress: 100, // force progress to 100 to occupy full width if Frappe uses it
+        progress: 0,
         custom_class: `gantt-proj-${project.id}`, // We can target this in CSS for colors
       };
-    }).filter(t => t !== null) as any[];
-
-    // Sort top to bottom chronologically
-    tasks.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    });
 
     if (tasks.length === 0) {
       if (ganttRef.current) ganttRef.current.innerHTML = '';
@@ -62,147 +55,234 @@ export default function GanttView() {
     }
 
     if (chartInstance.current) {
-        chartInstance.current.refresh(tasks);
-        chartInstance.current.change_view_mode(viewMode);
+      chartInstance.current.refresh(tasks);
+      chartInstance.current.change_view_mode(viewMode);
     } else {
-        chartInstance.current = new Gantt(ganttRef.current, tasks, {
-          view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month', 'Year'],
-          view_mode: viewMode,
-          readonly: true, // Attempt to set readonly if fork supports it
-          on_click: (task: any) => {
-            // Click to hide project
-            toggleProject(task.id);
-            
-            // Show undo toast
-            import('react-hot-toast').then(({ toast }) => {
-              toast.success(`Hidden "${task.name}"`, {
-                style: {
-                  background: '#1f2937', // glass panel dark
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                },
-                iconTheme: { primary: '#10b981', secondary: '#1f2937' },
-                action: {
-                  label: 'Undo',
-                  onClick: () => toggleProject(task.id),
-                },
-              } as any);
-            });
-          },
-          on_date_change: (task: any, start: any, end: any) => {
-             // Immediately snap back if they try to drag it, since we don't want them editing events from the Gantt chart summary level
-             if (chartInstance.current) chartInstance.current.refresh(tasks);
-          },
-          on_progress_change: (task: any, progress: any) => {
-             // Snap back
-             if (chartInstance.current) chartInstance.current.refresh(tasks);
-          },
-          custom_popup_html: function(task: any) {
-            return `
-              <div class="glass-panel p-3 min-w-[150px]">
+      chartInstance.current = new Gantt(ganttRef.current, tasks, {
+        view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month', 'Year'],
+        view_mode: viewMode,
+        on_click: function (task: any) {
+          const el = document.querySelector('.rbc-calendar');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        },
+        custom_popup_html: function (task: any) {
+          const state = useAppStore.getState();
+          const projectEvents = state.events.filter(e => e.projectId === task.id && e.isToggled);
+          const projectClashes = detectClashes(state.projects, state.events, state.eventTypeFilters);
+          const clashingIds = new Set(projectClashes.flatMap(c => [c.event1.id, c.event2.id]));
+          
+          const rehearsals = projectEvents.filter(e => e.type === 'rehearsal');
+          const missedReh = rehearsals.filter(e => clashingIds.has(e.id)).length;
+          const pct = rehearsals.length > 0 ? Math.round((missedReh / rehearsals.length) * 100) : 0;
+
+          return `
+              <div class="glass-panel p-3 min-w-[200px]">
                 <h4 class="font-bold text-white mb-1">${task.name}</h4>
-                <p class="text-xs text-gray-300">Spans: ${moment(task._start).format('MMM Do')} - ${moment(task._end).format('MMM Do YYYY')}</p>
+                <p class="text-xs text-gray-300 mb-2">${moment(task._start).format('MMM Do')} - ${moment(task._end).format('MMM Do YYYY')}</p>
+                <div class="text-xs bg-gray-900/50 p-2 rounded border border-white/5">
+                  <span class="${pct > 0 ? 'text-orange-400 font-bold' : 'text-green-400 border-green-500/20'}">${pct}% Rehearsals Missed / Clashing</span>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-2 font-mono uppercase tracking-wider">Instructions:</p>
+                <p class="text-[10px] text-gray-400 leading-tight">1. Right-click bar to hide project<br/>2. Click orange clash stripes to select for Calendar</p>
               </div>
             `;
+        }
+      });
+      
+      // Attach Context Menu listener for right clicking to hide
+      if (ganttRef.current) {
+        ganttRef.current.oncontextmenu = (e: MouseEvent) => {
+          e.preventDefault();
+          const target = e.target as HTMLElement;
+          const barWrapper = target.closest('.bar-wrapper');
+          if (barWrapper) {
+            const taskId = barWrapper.getAttribute('data-id');
+            if (taskId) {
+              const { toggleProject } = useAppStore.getState();
+              toggleProject(taskId);
+              
+              const proj = useAppStore.getState().projects.find(p => p.id === taskId);
+              
+              import('react-hot-toast').then(({ toast }) => {
+                toast.success(`Removed "${proj?.name || 'Project'}"`, {
+                  style: {
+                    background: '#1f2937', color: '#fff', border: '1px solid rgba(255,255,255,0.1)',
+                  },
+                  iconTheme: { primary: '#10b981', secondary: '#1f2937' },
+                  action: { label: 'Undo', onClick: () => toggleProject(taskId) },
+                } as any);
+              });
+            }
           }
-        });
+        };
+      }
     }
+
+    // Stripe Injection Logic
+    setTimeout(() => {
+      const state = useAppStore.getState();
+      const clashes = detectClashes(state.projects, state.events, state.eventTypeFilters);
+      const clashingEventIds = new Set(clashes.flatMap(c => [c.event1.id, c.event2.id]));
+
+      const barWrappers = document.querySelectorAll('.bar-wrapper');
+      barWrappers.forEach(wrapper => {
+        const projectId = wrapper.getAttribute('data-id');
+        if (!projectId) return;
+
+        const projectTask = tasks.find(t => t.id === projectId);
+        if (!projectTask) return;
+
+        const projEvents = events.filter(e => e.projectId === projectId && e.isToggled);
+        if (projEvents.length === 0) return;
+
+        const mainBar = wrapper.querySelector('.bar') as SVGRectElement;
+        if (!mainBar) return;
+
+        const barX = parseFloat(mainBar.getAttribute('x') || '0');
+        const barWidth = parseFloat(mainBar.getAttribute('width') || '0');
+        const barHeight = parseFloat(mainBar.getAttribute('height') || '0');
+        const barY = parseFloat(mainBar.getAttribute('y') || '0');
+
+        const projStartMs = new Date(projectTask.start).getTime();
+        const projEndMs = new Date(projectTask.end).getTime();
+        const projDuration = projEndMs - projStartMs;
+
+        wrapper.querySelectorAll('.event-stripe').forEach(el => el.remove());
+
+        if (projDuration > 0) {
+          projEvents.forEach(e => {
+            const isClash = clashingEventIds.has(e.id);
+            const eStartMs = e.startTime.getTime();
+            const eEndMs = e.endTime.getTime();
+            
+            // Adjust start point if it's before the clipped visual start
+            if (eEndMs < projStartMs) return; // Completely invisible
+
+            const boundedStartMs = Math.max(eStartMs, projStartMs);
+            const eDuration = Math.max(eEndMs - boundedStartMs, 86400000 / 2); // Min 12h visual width
+
+            const offsetRatio = (boundedStartMs - projStartMs) / projDuration;
+            const widthRatio = eDuration / projDuration;
+
+            const rectX = barX + (offsetRatio * barWidth);
+            const rectWidth = Math.max(widthRatio * barWidth, 4); 
+
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('class', 'event-stripe');
+            rect.setAttribute('x', rectX.toString());
+            rect.setAttribute('y', barY.toString());
+            rect.setAttribute('width', rectWidth.toString());
+            rect.setAttribute('height', barHeight.toString());
+            rect.setAttribute('fill', isClash ? '#f97316' : 'rgba(255,255,255,0.4)'); 
+            rect.setAttribute('rx', '2');
+            rect.setAttribute('ry', '2');
+            
+            if (isClash) {
+              rect.style.cursor = 'pointer';
+              rect.onclick = (event) => {
+                event.stopPropagation();
+                useAppStore.getState().setSelectedClashEventId(e.id);
+                const el = document.querySelector('.rbc-calendar');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              };
+            }
+
+            wrapper.appendChild(rect);
+          });
+        }
+      });
+
+      // --- Draw Month Gridlines ---
+      const gridHeader = document.querySelector('.gantt .grid-header');
+      if (gridHeader) {
+        // Remove old month lines globally safely
+        document.querySelectorAll('.gantt .month-gridline').forEach(el => el.remove());
+        document.querySelectorAll('.gantt .month-gridline-label').forEach(el => el.remove());
+
+        // We need to figure out where the months start visually. 
+        // A simple way is to find the lower-text elements that represent the first day of a month
+        // or interpolate based on the total width and time range.
+        const totalDurationMs = new Date(tasks[0].end).getTime() - new Date(tasks[0].start).getTime();
+        const totalWidth = Array.from(document.querySelectorAll('.gantt .grid-row'))
+            .reduce((max, row) => Math.max(max, parseFloat(row.getAttribute('width') || '0')), 0);
+
+        if(totalWidth > 0 && totalDurationMs > 0) {
+            let currentMonth = moment(tasks[0].start).startOf('month');
+            const endMonth = moment(tasks[tasks.length-1].end).endOf('month');
+            
+            // Find root SVG group to append gridlines so they don't get clipped by row wrappers
+            const svgGroup = document.querySelector('.gantt .grid-background')?.parentElement;
+
+            if (svgGroup) {
+              // Clean existing gridlines explicitly first
+              svgGroup.querySelectorAll('.month-gridline').forEach(el => el.remove());
+              
+              while(currentMonth.isBefore(endMonth)) {
+                  const monthStartMs = currentMonth.valueOf();
+                  
+                  if (monthStartMs >= new Date(tasks[0].start).getTime()) {
+                      const ratio = (monthStartMs - new Date(tasks[0].start).getTime()) / totalDurationMs;
+                      const xPos = ratio * totalWidth;
+
+                      const svgHeight = document.querySelector('.gantt svg')?.getAttribute('height') || '1000';
+                      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                      line.setAttribute('class', 'month-gridline');
+                      line.setAttribute('x1', xPos.toString());
+                      line.setAttribute('y1', '0');
+                      line.setAttribute('x2', xPos.toString());
+                      line.setAttribute('y2', svgHeight);
+                      line.setAttribute('stroke', 'rgba(255, 255, 255, 0.15)');
+                      line.setAttribute('stroke-width', '2');
+                      line.setAttribute('stroke-dasharray', '4,4');
+                      svgGroup.appendChild(line);
+                  }
+                  currentMonth.add(1, 'month');
+              }
+            }
+        }
+      }
+
+    }, 150); // Small timeout to ensure Frappe Gantt has finished SVG rendering
 
   }, [events, projects, viewMode, eventTypeFilters]);
 
-  // Generate SVG Gradients for Stripes
-  const renderGradients = () => {
-    return activeProjects.map(project => {
-      const pEvents = events.filter(e => e.projectId === project.id && e.isToggled);
-      if (pEvents.length === 0) return null;
-      
-      pEvents.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-      
-      const pStart = new Date(pEvents[0].startTime).getTime();
-      const pEnd = new Date(pEvents[pEvents.length - 1].endTime).getTime();
-      const duration = pEnd - pStart || 1;
-
-      // Merge overlapping intervals
-      const intervals = pEvents.map(e => ({
-        start: new Date(e.startTime).getTime(),
-        // minimum stripe width of 24 hours to ensure visibility on large timescales
-        end: Math.max(new Date(e.endTime).getTime(), new Date(e.startTime).getTime() + 24 * 60 * 60 * 1000) 
-      })).sort((a, b) => a.start - b.start);
-
-      const merged = [];
-      if (intervals.length > 0) {
-        let current = intervals[0];
-        for (let i = 1; i < intervals.length; i++) {
-           if (intervals[i].start <= current.end) {
-              current.end = Math.max(current.end, intervals[i].end);
-           } else {
-              merged.push(current);
-              current = intervals[i];
-           }
-        }
-        merged.push(current);
-      }
-
-      const stops = [];
-      stops.push(<stop key="start" offset="0%" stopColor={project.color} stopOpacity={0.2} />);
-
-      merged.forEach((m, idx) => {
-          const startPct = Math.max(0, Math.min(100, ((m.start - pStart) / duration) * 100));
-          const endPct = Math.max(0, Math.min(100, ((m.end - pStart) / duration) * 100));
-
-          stops.push(
-            <stop key={`m-${idx}-1`} offset={`${startPct}%`} stopColor={project.color} stopOpacity={0.2} />,
-            <stop key={`m-${idx}-2`} offset={`${startPct}%`} stopColor={project.color} stopOpacity={1} />,
-            <stop key={`m-${idx}-3`} offset={`${endPct}%`} stopColor={project.color} stopOpacity={1} />,
-            <stop key={`m-${idx}-4`} offset={`${endPct}%`} stopColor={project.color} stopOpacity={0.2} />
-          );
-      });
-
-      stops.push(<stop key="end" offset="100%" stopColor={project.color} stopOpacity={0.2} />);
-
-      return (
-        <linearGradient key={project.id} id={`grad-${project.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-          {stops}
-        </linearGradient>
-      );
-    });
-  };
-
   return (
     <>
-      <svg width="0" height="0" style={{ position: 'absolute' }}>
-        <defs>
-          {renderGradients()}
-        </defs>
-      </svg>
       <style jsx global>{`
         ${projects.map(p => `
-          .bar-wrapper.gantt-proj-${p.id} .bar { fill: url(#grad-${p.id}) !important; opacity: 1 !important;  stroke: ${p.color}; stroke-width: 1px; }
-          .bar-wrapper.gantt-proj-${p.id} .bar-progress { fill: transparent !important; }
+          .gantt-proj-${p.id} .bar { fill: ${p.color} !important; opacity: 0.8; }
+          .gantt-proj-${p.id} .bar-progress { fill: ${p.color} !important; opacity: 1; }
         `).join('')}
-        
-        .gantt .handle-group { 
-           display: none !important; 
-        }
       `}</style>
       <div className="flex flex-col gap-4">
 
-      <div className="flex justify-end gap-2 mb-2 flex-wrap">
-        {['Day', 'Week', 'Month', 'Year'].map((mode) => (
+        <div className="flex justify-end gap-2 mb-2">
           <button
-            key={mode}
-            onClick={() => setViewMode(mode as any)}
-            className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === mode ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
+            onClick={() => setViewMode('Week')}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Week' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
           >
-            {mode} View
+            Week View
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode('Month')}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Month' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
+          >
+            Month View
+          </button>
+          <button
+            onClick={() => setViewMode('Year')}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${viewMode === 'Year' ? 'bg-purple-600 text-white' : 'glass-panel text-gray-400 hover:text-white'}`}
+          >
+            Year View
+          </button>
+        </div>
+
+        <div className="glass-panel p-0 overflow-hidden custom-gantt-theme">
+          <div className="w-full max-h-[600px] overflow-y-auto overflow-x-auto relative">
+             <div ref={ganttRef} className="w-full min-w-max"></div>
+          </div>
+        </div>
       </div>
-      
-      <div className="glass-panel p-6 overflow-x-auto custom-gantt-theme">
-        <div ref={ganttRef} className="w-full"></div>
-      </div>
-    </div>
     </>
   );
 }

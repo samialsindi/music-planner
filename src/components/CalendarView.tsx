@@ -12,7 +12,7 @@ const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
 export default function CalendarView() {
-  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType } = useAppStore();
+  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType, selectedClashEventId, setSelectedClashEventId } = useAppStore();
   const [editingEvent, setEditingEvent] = useState<any>(null);
 
   const CustomEventComponent = (props: any) => {
@@ -72,11 +72,37 @@ export default function CalendarView() {
     let backgroundColor = project?.color || '#6b21a8';
     let borderColor = project?.color || 'transparent';
     let opacity = 0.7;
+    let textDecoration = 'none';
+    let color = '#ffffff';
+    let borderLeft = `4px solid ${borderColor}`;
     
     if (isClashing) {
       backgroundColor = 'var(--clash-red)';
       borderColor = '#fff';
       opacity = 0.9;
+      borderLeft = `4px solid #fff`;
+    }
+
+    // Cross out target when user clicks a clash in Gantt View
+    if (selectedClashEventId) {
+      const selectedEvent = events.find(e => e.id === selectedClashEventId);
+      if (selectedEvent && event.id !== selectedClashEventId) {
+        // Check temporal overlap
+        const e1Start = event.start.getTime();
+        const e1End = event.end.getTime();
+        const e2Start = selectedEvent.startTime.getTime();
+        const e2End = selectedEvent.endTime.getTime();
+        
+        if (e1Start < e2End && e1End > e2Start) {
+          // This event overlaps with the selected clash event! Cross it out
+          backgroundColor = 'rgba(225, 29, 72, 0.1)'; // faint red
+          borderColor = 'var(--clash-red)';
+          color = 'var(--clash-red)';
+          textDecoration = 'line-through';
+          opacity = 0.5;
+          borderLeft = `1px solid var(--clash-red)`;
+        }
+      }
     }
 
     return {
@@ -85,11 +111,12 @@ export default function CalendarView() {
         borderColor,
         borderRadius: '6px',
         opacity,
-        color: '#ffffff',
+        color,
         border: `1px solid ${borderColor}`,
-        borderLeft: `4px solid ${borderColor}`,
+        borderLeft,
+        textDecoration,
         display: 'block',
-        textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+        textShadow: textDecoration === 'none' ? '0 1px 2px rgba(0,0,0,0.8)' : 'none'
       }
     };
   };
@@ -114,7 +141,16 @@ export default function CalendarView() {
   return (
     <div className="flex flex-col gap-4">
       {/* Event Type Filters Above Calendar */}
-      <div className="flex flex-wrap gap-2 justify-end glass-panel px-6 py-3 rounded-xl border border-white/5">
+      <div className="flex flex-wrap gap-2 justify-end glass-panel px-6 py-3 rounded-xl border border-white/5 items-center">
+        {selectedClashEventId && (
+          <button 
+            onClick={() => setSelectedClashEventId(null)}
+            className="mr-auto text-xs font-bold text-red-400 bg-red-400/10 px-3 py-1.5 rounded hover:bg-red-400/20 transition flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            Clear Selected Clash
+          </button>
+        )}
         <span className="text-sm font-bold text-gray-400 mr-2 self-center">Filter Events:</span>
         {(['rehearsal', 'concert', 'personal', 'other'] as const).map((type) => (
           <button
@@ -172,13 +208,51 @@ export default function CalendarView() {
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">Assign to Project</label>
-              <select 
-                className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-                value={editingEvent.resource.projectId}
-                onChange={(e) => setEditingEvent({...editingEvent, resource: {...editingEvent.resource, projectId: e.target.value}})}
-              >
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select 
+                  className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  value={editingEvent.resource.projectId}
+                  onChange={(e) => setEditingEvent({...editingEvent, resource: {...editingEvent.resource, projectId: e.target.value}})}
+                >
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <button
+                  className="shrink-0 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded-lg transition-colors border border-gray-700"
+                  onClick={async () => {
+                    const name = window.prompt("Enter new project name:");
+                    if (name && name.trim()) {
+                      const { createClient } = await import('@supabase/supabase-js');
+                      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+                      
+                      // Using the first orchestra as a default for quick-add, or ideally a generic one
+                      const orchestraId = projects[0]?.orchestraId || undefined;
+                      
+                      if (orchestraId) {
+                         const { data: newProj, error } = await supabase.from('projects').insert({
+                           name: name.trim(),
+                           orchestra_id: orchestraId,
+                           color: '#3b82f6' // default blue
+                         }).select().single();
+                         
+                         if (!error && newProj) {
+                           useAppStore.getState().setProjects([...projects, {
+                             id: newProj.id,
+                             name: newProj.name,
+                             orchestraId: newProj.orchestra_id,
+                             color: newProj.color,
+                             isActive: newProj.is_active
+                           }]);
+                           setEditingEvent({...editingEvent, resource: {...editingEvent.resource, projectId: newProj.id}});
+                         }
+                      } else {
+                         alert("No orchestra found to attach this project to.");
+                      }
+                    }
+                  }}
+                >
+                  + New
+                </button>
+              </div>
             </div>
             <div className="flex justify-between items-center mt-8 pt-4 border-t border-white/10">
               <button 

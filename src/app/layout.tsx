@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import './globals.css';
-import ClashFooter from '@/components/ClashFooter';
 
 export const metadata: Metadata = {
   title: 'Music Planner | Vibecoding Edition',
@@ -59,7 +58,6 @@ export default function RootLayout({
           <div className="flex-1 pb-24">
             {children}
           </div>
-          <ClashFooter />
         </main>
         <Toaster position="bottom-right" />
       </body>

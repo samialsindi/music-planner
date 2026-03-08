@@ -50,10 +50,12 @@ interface AppState {
   orchestras: Orchestra[];
   projects: Project[];
   events: ProjectEvent[];
+  selectedClashEventId: string | null;
   
   // Actions
+  setSelectedClashEventId: (id: string | null) => void;
   toggleOrchestra: (orchestraId: string) => void;
-  toggleProject: (projectId: string) => void;
+  toggleProject: (projectId: string) => Promise<void>;
   toggleEventType: (eventType: keyof EventTypeFilters) => void;
   toggleEvent: (eventId: string) => Promise<void>;
   addEvent: (event: ProjectEvent) => void;
@@ -63,24 +65,47 @@ interface AppState {
   setEvents: (events: ProjectEvent[]) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  orchestras: [],
-  projects: [],
-  events: [],
-  eventTypeFilters: {
+const isBrowser = typeof window !== 'undefined';
+const getInitialFilters = (): EventTypeFilters => {
+  if (isBrowser) {
+    const saved = localStorage.getItem('music-planner-filters');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // ignore JSON parse error
+      }
+    }
+  }
+  return {
     rehearsal: true,
     concert: true,
     personal: true,
     other: true,
-  },
+  };
+};
+
+export const useAppStore = create<AppState>((set, get) => ({
+  orchestras: [],
+  projects: [],
+  events: [],
+  selectedClashEventId: null,
+  eventTypeFilters: getInitialFilters(),
   
-  toggleEventType: (eventType) =>
-    set((state) => ({
-      eventTypeFilters: {
+  setSelectedClashEventId: (id) => set({ selectedClashEventId: id }),
+  
+  toggleEventType: (eventType) => {
+    set((state) => {
+      const newFilters = {
         ...state.eventTypeFilters,
         [eventType]: !state.eventTypeFilters[eventType],
-      },
-    })),
+      };
+      if (isBrowser) {
+        localStorage.setItem('music-planner-filters', JSON.stringify(newFilters));
+      }
+      return { eventTypeFilters: newFilters };
+    });
+  },
 
   toggleOrchestra: (orchestraId) =>
     set((state) => ({
@@ -89,12 +114,30 @@ export const useAppStore = create<AppState>((set) => ({
       ),
     })),
 
-  toggleProject: (projectId) =>
+  toggleProject: async (projectId) => {
+    // 1. Optimistic local update
     set((state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId ? { ...p, isActive: !p.isActive } : p
       ),
-    })),
+    }));
+
+    // 2. Persist to Supabase
+    const { projects } = useAppStore.getState();
+    const toggledProject = projects.find(p => p.id === projectId);
+    if (toggledProject) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+      if (supabaseUrl && supabaseAnonKey) {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        await supabase
+          .from('projects')
+          .update({ is_active: toggledProject.isActive })
+          .eq('id', projectId);
+      }
+    }
+  },
     
   toggleEvent: async (eventId) => {
     // 1. Optimistic local update
