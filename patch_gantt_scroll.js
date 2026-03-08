@@ -1,41 +1,32 @@
 const fs = require('fs');
+const path = require('path');
 
-const path = 'src/components/GanttView.tsx';
-let content = fs.readFileSync(path, 'utf8');
+const filePath = path.join(__dirname, 'src', 'components', 'GanttView.tsx');
+let content = fs.readFileSync(filePath, 'utf8');
 
-const search = `      // Auto-scroll to "Today" to clamp view left-alignment
-      const scrollWrapper = document.querySelector('.gantt-scroll-wrapper') as HTMLElement;
-      const todayLine = document.querySelector('.gantt .today-highlight');
-      if (scrollWrapper && todayLine) {
-        const xPos = parseFloat(todayLine.getAttribute('x') || '0');
-        // Scroll so today is 20px from the left edge
-        scrollWrapper.scrollLeft = Math.max(0, xPos - 20);
-      }`;
+// Update scroll handling logic to fix mobile issues.
+// 1. Mobile often uses `requestAnimationFrame` for smoother scroll updates since events might fire asynchronously.
+// 2. SVG transform needs to handle the container correctly.
 
-const replace = `      // Auto-scroll to "Today" to clamp view left-alignment
-      const scrollWrapper = document.querySelector('.gantt-scroll-wrapper') as HTMLElement;
-      const todayLine = document.querySelector('.gantt .today-highlight');
-      if (scrollWrapper && todayLine) {
-        const xPos = parseFloat(todayLine.getAttribute('x') || '0');
-        // Scroll so today is 20px from the left edge
-        scrollWrapper.scrollLeft = Math.max(0, xPos - 20);
-      }
+content = content.replace(/const handleScroll = \(\) => \{[\s\S]*? \};\s*\};\s*if \(\(scrollWrapper as any\)\._stickyScrollHandler\)/,
+`const handleScroll = () => {
+    requestAnimationFrame(() => {
+        const svgGroup = document.querySelector('.sticky-header-group') as SVGGElement;
+        if (svgGroup && scrollWrapper) {
+            svgGroup.setAttribute('transform', \`translate(0, \${scrollWrapper.scrollTop})\`);
+        }
+    });
+};
 
-      // Also scroll vertically to the first actual task bar (ignoring ghost/hidden tasks if needed)
-      if (scrollWrapper) {
-          const firstTaskRow = document.querySelector('.gantt .bar-wrapper');
-          if (firstTaskRow) {
-             const yPos = parseFloat(firstTaskRow.getAttribute('data-id') ? '0' : '0');
-             // We just scroll to top for vertical since we filtered out empty projects.
-             // But let's let sticky header handle it or just set scroll to 0 to be safe
-             // actually just resetting scroll top to 0 is best
-             scrollWrapper.scrollTop = 0;
-          }
-      }`;
-
-if (content.includes(search)) {
-    fs.writeFileSync(path, content.replace(search, replace));
-    console.log("Patched successfully");
-} else {
-    console.log("Could not find text to replace");
+// Also listen to touchmove to enforce smooth updates during finger dragging
+if ((scrollWrapper as any)._stickyScrollHandler) {
+    scrollWrapper.removeEventListener('scroll', (scrollWrapper as any)._stickyScrollHandler);
+    scrollWrapper.removeEventListener('touchmove', (scrollWrapper as any)._stickyScrollHandler);
 }
+(scrollWrapper as any)._stickyScrollHandler = handleScroll;
+scrollWrapper.addEventListener('scroll', handleScroll, { passive: true });
+scrollWrapper.addEventListener('touchmove', handleScroll, { passive: true });
+`);
+
+fs.writeFileSync(filePath, content);
+console.log('patched src/components/GanttView.tsx for mobile sticky header');

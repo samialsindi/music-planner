@@ -38,6 +38,12 @@ export interface Project {
   isActive: boolean; // High level toggle
 }
 
+export interface UserSettings {
+  hiddenProjectIds: string[];
+  hiddenEventIds: string[];
+  eventTypeFilters: EventTypeFilters;
+}
+
 export interface EventTypeFilters {
   rehearsal: boolean;
   concert: boolean;
@@ -46,11 +52,14 @@ export interface EventTypeFilters {
 }
 
 interface AppState {
+  settings: UserSettings;
   eventTypeFilters: EventTypeFilters;
   orchestras: Orchestra[];
   projects: Project[];
   events: ProjectEvent[];
   selectedClashEventId: string | null;
+  calendarDate: Date;
+  calendarView: 'month' | 'week' | 'day' | 'agenda';
   
   // Actions
   setSelectedClashEventId: (id: string | null) => void;
@@ -63,49 +72,46 @@ interface AppState {
   setOrchestras: (orchestras: Orchestra[]) => void;
   setProjects: (projects: Project[]) => void;
   setEvents: (events: ProjectEvent[]) => void;
+  setSettings: (settings: UserSettings) => void;
+  setCalendarDate: (date: Date) => void;
+  setCalendarView: (view: 'month' | 'week' | 'day' | 'agenda') => void;
+  undoLastAction: () => Promise<void>;
 }
 
 const isBrowser = typeof window !== 'undefined';
-const getInitialFilters = (): EventTypeFilters => {
-  if (isBrowser) {
-    const saved = localStorage.getItem('music-planner-filters');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // ignore JSON parse error
-      }
-    }
-  }
-  return {
-    rehearsal: true,
-    concert: true,
-    personal: true,
-    other: true,
-  };
+const defaultSettings: UserSettings = {
+  hiddenProjectIds: [],
+  hiddenEventIds: [],
+  eventTypeFilters: { rehearsal: true, concert: true, personal: true, other: true }
 };
-
 export const useAppStore = create<AppState>((set, get) => ({
   orchestras: [],
   projects: [],
   events: [],
   selectedClashEventId: null,
-  eventTypeFilters: getInitialFilters(),
+  calendarDate: new Date(),
+  calendarView: 'month',
+  settings: defaultSettings,
+  get eventTypeFilters() { return get().settings.eventTypeFilters; },
   
   setSelectedClashEventId: (id) => set({ selectedClashEventId: id }),
+  setCalendarDate: (date) => set({ calendarDate: date }),
+  setCalendarView: (view) => set({ calendarView: view }),
+  setSettings: (settings) => set({ settings }),
   
-  toggleEventType: (eventType) => {
-    set((state) => {
-      const newFilters = {
-        ...state.eventTypeFilters,
-        [eventType]: !state.eventTypeFilters[eventType],
-      };
-      if (isBrowser) {
-        localStorage.setItem('music-planner-filters', JSON.stringify(newFilters));
-      }
-      return { eventTypeFilters: newFilters };
-    });
+  toggleEventType: async (eventType) => {
+    const { settings } = get();
+    const newFilters = { ...settings.eventTypeFilters, [eventType]: !settings.eventTypeFilters[eventType] };
+    const newSettings = { ...settings, eventTypeFilters: newFilters };
+    set({ settings: newSettings });
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('user_settings').update({ event_type_filters: newFilters }).eq('id', 1);
   },
+
+
+
 
   toggleOrchestra: (orchestraId) =>
     set((state) => ({
@@ -115,60 +121,110 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   toggleProject: async (projectId) => {
-    // 1. Optimistic local update
-    set((state) => ({
-      projects: state.projects.map((p) =>
-        p.id === projectId ? { ...p, isActive: !p.isActive } : p
-      ),
-    }));
+    const { settings } = get();
+    const isCurrentlyHidden = settings.hiddenProjectIds.includes(projectId);
 
-    // 2. Persist to Supabase
-    const { projects } = useAppStore.getState();
-    const toggledProject = projects.find(p => p.id === projectId);
-    if (toggledProject) {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        await supabase
-          .from('projects')
-          .update({ is_active: toggledProject.isActive })
-          .eq('id', projectId);
-      }
-    }
-  },
-    
-  toggleEvent: async (eventId) => {
-    // 1. Optimistic local update
-    set((state) => ({
-      events: state.events.map((e) =>
-        e.id === eventId ? { ...e, isToggled: !e.isToggled } : e
-      ),
-    }));
+    // Audit Log Entry
+    const { logAction } = await import('./audit');
+    await logAction('TOGGLE_PROJECT', projectId, { isHidden: isCurrentlyHidden }, { isHidden: !isCurrentlyHidden });
 
-    // 2. Persist to Supabase
-    const { events } = useAppStore.getState();
-    const toggledEvent = events.find(e => e.id === eventId);
-    if (toggledEvent) {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        await supabase
-          .from('events')
-          .update({ is_toggled: toggledEvent.isToggled })
-          .eq('id', eventId);
-      }
-    }
+    const newHiddenIds = isCurrentlyHidden
+      ? settings.hiddenProjectIds.filter(id => id !== projectId)
+      : [...settings.hiddenProjectIds, projectId];
+
+    set({ settings: { ...settings, hiddenProjectIds: newHiddenIds } });
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('user_settings').update({ hidden_project_ids: newHiddenIds }).eq('id', 1);
   },
+toggleEvent: async (eventId) => {
+    const { settings } = get();
+    const isCurrentlyHidden = settings.hiddenEventIds.includes(eventId);
     
-  addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
-  updateEvent: (updatedEvent) => set((state) => ({
-    events: state.events.map(e => e.id === updatedEvent.id ? updatedEvent : e)
-  })),
+    // Audit Log Entry
+    const { logAction } = await import('./audit');
+    await logAction('TOGGLE_EVENT', eventId, { isHidden: isCurrentlyHidden }, { isHidden: !isCurrentlyHidden });
+
+    const newHiddenIds = isCurrentlyHidden
+      ? settings.hiddenEventIds.filter(id => id !== eventId)
+      : [...settings.hiddenEventIds, eventId];
+
+    set({ settings: { ...settings, hiddenEventIds: newHiddenIds } });
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
+  },
+addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
+  updateEvent: async (updatedEvent) => {
+    const { events } = get();
+    const oldEvent = events.find(e => e.id === updatedEvent.id);
+    if (oldEvent) {
+      const { logAction } = await import('./audit');
+      await logAction('UPDATE_EVENT', updatedEvent.id, oldEvent, updatedEvent);
+    }
+    set((state) => ({ events: state.events.map(e => e.id === updatedEvent.id ? updatedEvent : e) }));
+  },
   setOrchestras: (orchestras) => set({ orchestras }),
   setProjects: (projects) => set({ projects }),
   setEvents: (events) => set({ events }),
+  undoLastAction: async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('reverted', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.log('No actions to undo');
+      return;
+    }
+
+    const log = data;
+
+    // Revert logic
+    if (log.action_type === 'TOGGLE_PROJECT') {
+      const { settings, setSettings } = get();
+      const prevIsHidden = log.previous_state.isHidden;
+      const newHiddenIds = prevIsHidden
+        ? [...settings.hiddenProjectIds, log.entity_id]
+        : settings.hiddenProjectIds.filter(id => id !== log.entity_id);
+
+      setSettings({ ...settings, hiddenProjectIds: newHiddenIds });
+      await supabase.from('user_settings').update({ hidden_project_ids: newHiddenIds }).eq('id', 1);
+
+    } else if (log.action_type === 'TOGGLE_EVENT') {
+      const { settings, setSettings } = get();
+      const prevIsHidden = log.previous_state.isHidden;
+      const newHiddenIds = prevIsHidden
+        ? [...settings.hiddenEventIds, log.entity_id]
+        : settings.hiddenEventIds.filter(id => id !== log.entity_id);
+
+      setSettings({ ...settings, hiddenEventIds: newHiddenIds });
+      await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
+
+    } else if (log.action_type === 'UPDATE_EVENT') {
+      const prevEvent = log.previous_state;
+      // Revert in local state
+      set((state) => ({
+        events: state.events.map(e => e.id === log.entity_id ? prevEvent : e)
+      }));
+      // Revert in DB
+      await supabase.from('events').update({
+        title: prevEvent.title,
+        project_id: prevEvent.projectId,
+        start_time: prevEvent.startTime,
+        end_time: prevEvent.endTime
+      }).eq('id', log.entity_id);
+    }
+
+    // Mark reverted
+    await supabase.from('audit_log').update({ reverted: true }).eq('id', log.id);
+  }
 }));

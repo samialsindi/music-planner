@@ -1,0 +1,15 @@
+
+> music-planner@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.2:3000
+
+✓ Starting...
+✓ Ready in 766ms
+○ Compiling / ...
+Your app (or one of its dependencies) is using an outdated JSX transform. Update to the modern JSX transform for faster performance: https://react.dev/link/new-jsx-transform
+ GET / 200 in 8.6s (compile: 7.5s, render: 1051ms)
+ GET / 200 in 119ms (compile: 6ms, render: 113ms)
+ GET / 200 in 102ms (compile: 4ms, render: 97ms)

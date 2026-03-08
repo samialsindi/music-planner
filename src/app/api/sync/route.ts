@@ -33,6 +33,9 @@ export async function GET() {
     );
 
     try {
+        // Clear audit log to prevent undoing stale IDs
+        await supabase.from('audit_log').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
         const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to fetch ICS file");
         const icsData = await response.text();

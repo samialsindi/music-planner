@@ -1,4 +1,5 @@
 'use client';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useMemo, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
@@ -12,7 +13,14 @@ const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
 export default function CalendarView() {
-  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType, selectedClashEventId, setSelectedClashEventId } = useAppStore();
+  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType, selectedClashEventId, setSelectedClashEventId, settings, undoLastAction, calendarDate, calendarView, setCalendarDate, setCalendarView } = useAppStore();
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
+  const longPressProps = useLongPress((e: any) => {
+    if (e.touches) e.preventDefault();
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    setContextMenu({ x, y });
+  });
   const [editingEvent, setEditingEvent] = useState<any>(null);
 
   const CustomEventComponent = (props: any) => {
@@ -29,7 +37,7 @@ export default function CalendarView() {
           import('react-hot-toast').then(({ toast }) => {
             toast((t) => (
               <span className="flex items-center gap-2">
-                Removed "{props.event.title}"
+                Removed &quot;{props.event.title}&quot;
                 <button 
                   onClick={() => { toggleEvent(props.event.id); toast.dismiss(t.id); }}
                   className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs ml-2"
@@ -52,7 +60,7 @@ export default function CalendarView() {
   
   // Format events for react-big-calendar
   const calendarEvents = events
-    .filter(e => e.isToggled && projects.find(p => p.id === e.projectId)?.isActive && eventTypeFilters[e.type as keyof typeof eventTypeFilters]) // Only show toggled events for active projects and allowed types
+    .filter(e => e && !settings.hiddenEventIds.includes(e.id) && projects.find(p => p.id === e.projectId) && !settings.hiddenProjectIds.includes(e.projectId) && eventTypeFilters[e.type as keyof typeof eventTypeFilters]) // Only show toggled events for active projects and allowed types
     .map(e => ({
       id: e.id,
       title: e.title,
@@ -143,7 +151,7 @@ export default function CalendarView() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" {...longPressProps} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }} onClick={() => setContextMenu(null)}>
       {/* Event Type Filters Above Calendar */}
       <div className="flex flex-wrap gap-2 justify-end glass-panel px-6 py-3 rounded-xl border border-white/5 items-center">
         {selectedClashEventId && (
@@ -174,8 +182,10 @@ export default function CalendarView() {
       <div className="h-[600px] glass-panel p-6 relative">
         <DnDCalendar
         localizer={localizer}
-        popup={true}
-        defaultView="month"
+        view={calendarView}
+        onView={(v: any) => setCalendarView(v)}
+        date={calendarDate}
+        onNavigate={(d: Date) => setCalendarDate(d)}
         events={calendarEvents}
         startAccessor={(e: any) => e.start}
         endAccessor={(e: any) => e.end}
@@ -197,7 +207,25 @@ export default function CalendarView() {
     </div>
 
     {/* Event Edit Modal */}
-    {editingEvent && (
+    {contextMenu && (
+        <div
+          className="fixed z-[9999] bg-gray-900 border border-white/10 rounded-lg shadow-xl py-1"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+            onClick={async () => {
+              await undoLastAction();
+              setContextMenu(null);
+            }}
+          >
+            Undo Last Action
+          </button>
+        </div>
+      )}
+
+      {editingEvent && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
         <div className="bg-gray-900 border border-white/10 rounded-xl p-6 w-[400px] max-w-full shadow-2xl">
           <h3 className="text-xl font-bold text-white mb-4">Edit Event</h3>
