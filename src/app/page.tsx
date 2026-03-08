@@ -154,6 +154,77 @@ export default function Home() {
     }
   };
 
+
+  const handleCleanUp = async () => {
+    setIsProcessing(true);
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+
+      const updates = [];
+      const newHiddenIds = [...settings.hiddenEventIds];
+      let updatedCount = 0;
+
+      // 1. Process events ending before 12pm
+      for (const e of events) {
+        if (!e) continue;
+        const endHour = e.endTime.getHours();
+        const endMinute = e.endTime.getMinutes();
+        const endTimeFloat = endHour + (endMinute / 60);
+
+        if (endTimeFloat <= 12 && !e.isAllDay) {
+          // It ends before or at 12pm
+          updates.push(
+            supabase.from('events').update({ type: 'personal' }).eq('id', e.id)
+          );
+          if (!newHiddenIds.includes(e.id)) {
+            newHiddenIds.push(e.id);
+          }
+          updatedCount++;
+        }
+      }
+
+      // 2. Process all-day events that are NOT personal
+      for (const e of events) {
+        if (!e) continue;
+        if (e.isAllDay && e.type !== 'personal') {
+          // Convert to 7pm - 10pm same day
+          const newStart = new Date(e.startTime);
+          newStart.setHours(19, 0, 0, 0); // 7 PM
+
+          const newEnd = new Date(e.startTime);
+          newEnd.setHours(22, 0, 0, 0); // 10 PM
+
+          updates.push(
+            supabase.from('events').update({
+              is_all_day: false,
+              start_time: newStart.toISOString(),
+              end_time: newEnd.toISOString(),
+              type: 'rehearsal' // Default to rehearsal as requested "rehearsal 7-10pm"
+            }).eq('id', e.id)
+          );
+          updatedCount++;
+        }
+      }
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+        await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
+        alert(`Clean up complete! Updated ${updatedCount} events.`);
+        window.location.reload();
+      } else {
+        alert('No events needed cleaning up.');
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert('Error during clean up.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
   return (
     <div className="flex flex-col lg:flex-row gap-8 h-full">
       {/* Left Main Column: Visuals */}
@@ -166,6 +237,30 @@ export default function Home() {
           </div>
           <div className="flex flex-col gap-4 items-end">
             <div className="flex items-center gap-4">
+
+              <button
+                onClick={handleCleanUp}
+                disabled={isProcessing}
+                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
+                  isProcessing
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'glass-panel text-orange-400 border border-orange-500/30 hover:bg-orange-500/10'
+                }`}
+              >
+                🧹 Clean Up
+              </button>
+
+              <button
+                onClick={handleCleanUp}
+                disabled={isProcessing}
+                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
+                  isProcessing
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'glass-panel text-orange-400 border border-orange-500/30 hover:bg-orange-500/10'
+                }`}
+              >
+                🧹 Clean Up
+              </button>
               <button
                 onClick={handleSync}
                 disabled={isProcessing}
@@ -177,31 +272,7 @@ export default function Home() {
               >
                 Sync Calendar
               </button>
-              <button
-                onClick={toggleVoiceInput}
-                disabled={isProcessing}
-                className={`px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg font-medium whitespace-nowrap ${
-                  isListening
-                    ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20 text-white animate-pulse'
-                    : (isProcessing
-                        ? 'bg-purple-900 text-purple-300 cursor-not-allowed'
-                        : 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20 text-white')
-                }`}
-              >
-                {isListening ? (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-white animate-ping" />
-                    Listening...
-                  </>
-                ) : isProcessing ? (
-                  '🤖 AI Parsing...'
-                ) : (
-                  <>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3l0 0z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                    Voice Entry
-                  </>
-                )}
-              </button>
+
             </div>
             <div className="flex bg-gray-900/50 rounded-lg p-1 border border-white/5">
               <button
