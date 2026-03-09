@@ -28,8 +28,8 @@ export default function Home() {
         });
       }
 
-      // Fetch orchestras
-      const { data: orchData, error: orchErr } = await supabase.from('orchestras').select('*');
+      // Fetch orchestras (increased limit to avoid truncation at 1000)
+      const { data: orchData, error: orchErr } = await supabase.from('orchestras').select('*').limit(5000);
       if (!orchErr && orchData) {
         const mappedOrchestras = orchData.map((o: any) => ({
           id: o.id,
@@ -40,8 +40,8 @@ export default function Home() {
         setOrchestras(mappedOrchestras);
       }
 
-      // Fetch projects
-      const { data: projData, error: projErr } = await supabase.from('projects').select('*');
+      // Fetch projects (increased limit to avoid truncation at 1000)
+      const { data: projData, error: projErr } = await supabase.from('projects').select('*').limit(5000);
       if (!projErr && projData) {
         const mappedProjects = projData.map(p => ({
           id: p.id, orchestraId: p.orchestra_id,
@@ -52,8 +52,8 @@ export default function Home() {
         setProjects(mappedProjects);
       }
 
-      // Fetch events
-      const { data: evtData, error: evtErr } = await supabase.from('events').select('*');
+      // Fetch events (CRITICAL: DB has >1000 events, must increase limit and filter past events to see current schedule)
+      const { data: evtData, error: evtErr } = await supabase.from('events').select('*').gte('start_time', '2025-01-01').limit(10000);
       if (!evtErr && evtData) {
         const mappedEvents = evtData.map(e => ({
           id: e.id,
@@ -187,7 +187,7 @@ export default function Home() {
       // 2. Process all-day events that are NOT personal
       for (const e of events) {
         if (!e) continue;
-        
+
         let needsUpdate = false;
         let updateData: any = {};
 
@@ -210,16 +210,16 @@ export default function Home() {
 
         // Apply HSB abbreviation if missing
         if (e.title && (e.title.toLowerCase().includes('haverhill silver band') || e.title.includes('Haverhill'))) {
-            updateData = {
-               ...updateData,
-               title: e.title.replace(/Haverhill Silver Band/i, 'HSB')
-            };
-            needsUpdate = true;
+          updateData = {
+            ...updateData,
+            title: e.title.replace(/Haverhill Silver Band/i, 'HSB')
+          };
+          needsUpdate = true;
         }
 
         if (needsUpdate) {
-            updates.push(supabase.from('events').update(updateData).eq('id', e.id));
-            updatedCount++;
+          updates.push(supabase.from('events').update(updateData).eq('id', e.id));
+          updatedCount++;
         }
       }
 
@@ -257,11 +257,10 @@ export default function Home() {
               <button
                 onClick={handleCleanUp}
                 disabled={isProcessing}
-                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
-                  isProcessing
+                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${isProcessing
                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                     : 'glass-panel text-orange-400 border border-orange-500/30 hover:bg-orange-500/10'
-                }`}
+                  }`}
               >
                 🧹 Clean Up
               </button>
@@ -269,22 +268,20 @@ export default function Home() {
               <button
                 onClick={handleCleanUp}
                 disabled={isProcessing}
-                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
-                  isProcessing
+                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${isProcessing
                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                     : 'glass-panel text-orange-400 border border-orange-500/30 hover:bg-orange-500/10'
-                }`}
+                  }`}
               >
                 🧹 Clean Up
               </button>
               <button
                 onClick={handleSync}
                 disabled={isProcessing}
-                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${
-                  isProcessing
+                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${isProcessing
                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                     : 'glass-panel text-gray-300 hover:text-white hover:bg-white/5'
-                }`}
+                  }`}
               >
                 Sync Calendar
               </button>
@@ -293,21 +290,19 @@ export default function Home() {
             <div className="flex bg-gray-900/50 rounded-lg p-1 border border-white/5">
               <button
                 onClick={() => setActiveTab('calendar')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  activeTab === 'calendar'
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'calendar'
                     ? 'bg-purple-600 text-white shadow-lg'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                }`}
+                  }`}
               >
                 Calendar
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                  activeTab === 'pending'
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'pending'
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
                     : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
-                }`}
+                  }`}
               >
                 Pending Review
                 {pendingCount > 0 && (

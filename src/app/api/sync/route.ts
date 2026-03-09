@@ -79,7 +79,7 @@ export async function GET() {
 
             const startDate = parseICSDate(dtstartMatch[1]);
             const isAllDay = dtstartMatch[1].length === 8;
-            
+
             let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
             if (isAllDay) {
@@ -124,7 +124,7 @@ export async function GET() {
                 // Check if the event starts with a known ensemble abbreviation (e.g. "CGC rehearsal")
                 eventTitle = parts[0];
                 const firstWord = eventTitle.split(' ')[0].toUpperCase();
-                
+
                 if (['CGC', 'HSB'].includes(firstWord)) {
                     orchName = firstWord;
                     projName = firstWord;
@@ -143,11 +143,11 @@ export async function GET() {
 
             if (isAllDay && eventType === 'rehearsal') {
                 finalIsAllDay = false;
-                
+
                 // Set start to 19:00 (7 PM)
                 finalStartDate = new Date(startDate);
                 finalStartDate.setUTCHours(19, 0, 0, 0);
-                
+
                 // Set end to 22:00 (10 PM)
                 finalEndDate = new Date(startDate);
                 finalEndDate.setUTCHours(22, 0, 0, 0);
@@ -182,16 +182,16 @@ export async function GET() {
                     for (let j = 0; j < occurrences.length; j++) {
                         // For repeating events, apply the exact same time adjustment logic as the base event
                         const occStart = occurrences[j];
-                        
+
                         let finalOccStart = occStart;
                         let finalOccEnd = new Date(occStart.getTime() + duration);
-                        
+
                         if (isAllDay && eventType === 'rehearsal') {
-                             finalOccStart = new Date(occStart);
-                             finalOccStart.setUTCHours(19, 0, 0, 0);
-                             
-                             finalOccEnd = new Date(occStart);
-                             finalOccEnd.setUTCHours(22, 0, 0, 0);
+                            finalOccStart = new Date(occStart);
+                            finalOccStart.setUTCHours(19, 0, 0, 0);
+
+                            finalOccEnd = new Date(occStart);
+                            finalOccEnd.setUTCHours(22, 0, 0, 0);
                         }
 
                         parsedEvents.push({
@@ -234,7 +234,8 @@ export async function GET() {
             for (const name of uniqueOrchNames) {
                 await supabase.from('orchestras').insert({ name, color: getNextColor() }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
             }
-            const { data: allOrchs } = await supabase.from('orchestras').select('id, name');
+            // Fetch all known orchestras to map names to IDs correctly
+            const { data: allOrchs } = await supabase.from('orchestras').select('id, name').limit(5000);
             const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
 
             // Create unique projects
@@ -251,7 +252,8 @@ export async function GET() {
                 }
             }
 
-            const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id');
+            // Fetch all known projects to map names to IDs correctly
+            const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id').limit(5000);
             const projMap = new Map(allProjs?.map(p => [`${p.orchestra_id}-${p.name}`, p.id]) || []);
 
             // Map project_id back to events
@@ -281,7 +283,8 @@ export async function GET() {
             const threshold = new Date();
             threshold.setHours(13, 30, 0, 0);
 
-            const { data: existingEventsData } = await supabase.from('events').select('id');
+            // Fetch existing IDs to avoid overwriting human-edited past events (must fetch beyond 1000 limit)
+            const { data: existingEventsData } = await supabase.from('events').select('id').limit(10000);
             const existingEventIds = new Set(existingEventsData?.map((e: any) => e.id) || []);
 
             const eventsToUpsert = uniqueEvents.filter((e: any) => {
