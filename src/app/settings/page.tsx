@@ -78,21 +78,38 @@ export default function SettingsPage() {
               then import it back to update everything in bulk.
             </p>
           </div>
-          <div className="flex gap-3">
-            <button 
-              onClick={handleExport}
-              disabled={isExporting}
-              className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex items-center gap-2 text-sm font-medium"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-              {isExporting ? 'Exporting...' : 'Export Mappings'}
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-3">
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex items-center gap-2 text-sm font-medium"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                {isExporting ? 'Exporting...' : 'Export Mappings'}
+              </button>
+              
+              <label className="cursor-pointer px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-2 text-sm font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                {isImporting ? 'Importing...' : 'Import Mappings'}
+                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+              </label>
+            </div>
             
-            <label className="cursor-pointer px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-2 text-sm font-medium">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-              {isImporting ? 'Importing...' : 'Import Mappings'}
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
+            <button 
+              onClick={async () => {
+                if (confirm('Randomize all project colors?')) {
+                  const res = await fetch('/api/mapping', { method: 'PATCH' });
+                  if (res.ok) {
+                    toast.success('Colors randomized!');
+                    window.location.reload();
+                  }
+                }
+              }}
+              className="w-full px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-xs text-gray-400"
+            >
+              🎨 Randomize Existing Project Colors
+            </button>
           </div>
         </div>
 

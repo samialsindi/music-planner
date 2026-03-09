@@ -110,3 +110,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function PATCH() {
+  try {
+    const { data: orchestras } = await supabase.from('orchestras').select('id');
+    const { data: projects } = await supabase.from('projects').select('id');
+
+    if (orchestras) {
+      for (const orch of orchestras) {
+        await supabase.from('orchestras').update({ color: getRandomColor() }).eq('id', orch.id);
+      }
+    }
+
+    if (projects) {
+      for (const proj of projects) {
+        await supabase.from('projects').update({ color: getRandomColor() }).eq('id', proj.id);
+      }
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
