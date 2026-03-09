@@ -66,13 +66,16 @@ export default function CalendarView() {
       const project = projects.find(p => p.id === e.projectId);
       const orchestra = project ? orchestras.find(o => o.id === project.orchestraId) : null;
 
-      let fullTitle = e.title;
-      if (orchestra && project) {
-        // Build "Orchestra - Project - Event" string
-        fullTitle = `${orchestra.name} - ${project.name} - ${e.title}`;
-      } else if (project) {
-        fullTitle = `${project.name} - ${e.title}`;
+      // Build a non-redundant label: skip parts that duplicate the event title
+      const parts: string[] = [];
+      if (orchestra && orchestra.name !== project?.name && orchestra.name !== e.title) {
+        parts.push(orchestra.name);
       }
+      if (project && project.name !== e.title) {
+        parts.push(project.name);
+      }
+      parts.push(e.title);
+      const fullTitle = parts.join(' - ');
 
       return {
         id: e.id,

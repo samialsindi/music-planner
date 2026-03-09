@@ -55,6 +55,7 @@ export interface EventTypeFilters {
 
 export const isEventValidDuration = (event: ProjectEvent): boolean => {
   if (!event || !event.startTime || !event.endTime) return false;
+  if (event.isAllDay) return true;
   const durationMs = new Date(event.endTime).getTime() - new Date(event.startTime).getTime();
   return durationMs > 30 * 60 * 1000;
 };

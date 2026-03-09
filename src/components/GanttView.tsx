@@ -395,10 +395,16 @@ export default function GanttView() {
   return (
     <>
       <style jsx global>{`
-        ${projects.map(p => `
-          .gantt-proj-${p.id} .bar { fill: ${p.color} !important; opacity: 0.8; }
-          .gantt-proj-${p.id} .bar-progress { fill: ${p.color} !important; opacity: 1; }
-        `).join('')}
+        ${projects.map(p => {
+          const escaped = p.id.replace(/-/g, '\\-');
+          return `
+          .gantt-proj-${escaped} .bar { fill: ${p.color} !important; opacity: 0.85; }
+          .gantt-proj-${escaped} .bar-progress { fill: ${p.color} !important; opacity: 1; }
+          .gantt-proj-${escaped} .bar-label { fill: #000 !important; font-weight: 700; }
+        `;
+        }).join('')}
+        .hidden-ghost-task { opacity: 0 !important; pointer-events: none; }
+        .gantt .bar-label { fill: #000 !important; font-weight: 700; font-size: 13px; }
       `}</style>
       <div className="flex flex-col gap-4" {...longPressProps} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY }); }} onClick={() => setContextMenu(null)}>
 
