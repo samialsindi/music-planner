@@ -80,6 +80,10 @@ export async function GET() {
             const startDate = parseICSDate(dtstartMatch[1]);
             const isAllDay = dtstartMatch[1].length === 8;
 
+            // --- USER FILTER: Only sync events from March 9th, 2026 onwards ---
+            const filterDate = new Date('2026-03-09');
+            if (startDate < filterDate) continue;
+
             let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
             if (isAllDay) {
@@ -99,7 +103,14 @@ export async function GET() {
             const isMotDue = title.toUpperCase().includes('MOT DUE');
             if (isAllDay && (isDailyRepeat || isMotDue)) continue;
 
-            let eventType = 'other';
+            // --- USER FILTER: Skip events shorter than or equal to 30 minutes ---
+            const durationMs = endDate.getTime() - startDate.getTime();
+            if (durationMs <= 30 * 60 * 1000 && !isAllDay) {
+                // Short event, skip it
+                continue;
+            }
+
+            let eventType: 'rehearsal' | 'concert' | 'other' = 'other';
             const lowerTitle = title.toLowerCase();
             if (lowerTitle.includes('rehearsal') || lowerTitle.includes('reh')) {
                 eventType = 'rehearsal';
@@ -272,10 +283,16 @@ export async function GET() {
             // Filter out any events that failed to map
             const validEvents = parsedEvents.filter(e => e.project_id);
 
-            // Deduplicate
+            // Deduplicate and apply final filters (>= 2026-03-09 and > 30 mins)
             const uniqueEventsMap = new Map();
             for (const event of validEvents) {
-                uniqueEventsMap.set(event.id, event);
+                const start = new Date(event.start_time);
+                const end = new Date(event.end_time);
+                const dur = end.getTime() - start.getTime();
+                
+                if (start >= new Date('2026-03-09') && (dur > 30 * 60 * 1000 || event.is_all_day)) {
+                    uniqueEventsMap.set(event.id, event);
+                }
             }
             const uniqueEvents = Array.from(uniqueEventsMap.values());
 

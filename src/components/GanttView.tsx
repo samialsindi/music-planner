@@ -368,22 +368,85 @@ export default function GanttView() {
 
           // Define the scroll handler
           const handleScroll = () => {
-             const svgGroup = document.querySelector('.sticky-header-group') as SVGGElement;
-             if (svgGroup && scrollWrapper) {
-                // translateY needs to be an exact translation on the Y axis matching scrollTop
-                svgGroup.setAttribute('transform', `translate(0, ${Math.max(0, scrollWrapper.scrollTop - 2)})`);
+             const headerGroup = document.querySelector('.sticky-header-group') as SVGGElement;
+             const labelsGroup = document.querySelector('.sticky-labels-group') as SVGGElement;
+             
+             if (scrollWrapper) {
+                if (headerGroup) {
+                   // Stick to top (Vertical scroll)
+                   headerGroup.setAttribute('transform', `translate(0, ${scrollWrapper.scrollTop})`);
+                }
+                if (labelsGroup) {
+                   // Stick to left (Horizontal scroll)
+                   labelsGroup.setAttribute('transform', `translate(${scrollWrapper.scrollLeft}, 0)`);
+                }
              }
           };
 
-          // Remove any old scroll listeners to avoid memory leaks or duplicate handlers
-          // An easy hack is to replace the wrapper with a clone, but that breaks react.
-          // Since it's inside a useEffect, we can just assign an ID or property to store the current handler.
+          // Create a dedicated group for sticky project labels (Left Freeze Pane)
+          let labelsGroup = svg.querySelector('.sticky-labels-group') as SVGGElement;
+          if (labelsGroup) labelsGroup.remove();
+          
+          labelsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          labelsGroup.setAttribute('class', 'sticky-labels-group');
+          svg.appendChild(labelsGroup);
+
+          // Add a background for the sticky labels column
+          const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          labelBg.setAttribute('x', '0');
+          labelBg.setAttribute('y', '0'); 
+          labelBg.setAttribute('width', '180'); 
+          labelBg.setAttribute('height', svg.getAttribute('height') || '5000');
+          labelBg.setAttribute('fill', '#111827');
+          labelBg.setAttribute('fill-opacity', '1');
+          labelsGroup.appendChild(labelBg);
+
+          // Add a right border to the labels group
+          const labelBorder = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          labelBorder.setAttribute('x1', '180');
+          labelBorder.setAttribute('y1', '0');
+          labelBorder.setAttribute('x2', '180');
+          labelBorder.setAttribute('y2', svg.getAttribute('height') || '5000');
+          labelBorder.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+          labelBorder.setAttribute('stroke-width', '1');
+          labelsGroup.appendChild(labelBorder);
+
+          // Clone project labels from bar wrappers into the sticky group
+          const barLabels = document.querySelectorAll('.gantt .bar-label');
+          barLabels.forEach(label => {
+              const taskRef = label.closest('.bar-wrapper');
+              if (taskRef) {
+                  const bar = taskRef.querySelector('.bar');
+                  if (bar) {
+                      const barY = parseFloat(bar.getAttribute('y') || '0');
+                      const barH = parseFloat(bar.getAttribute('height') || '0');
+                      
+                      const clonedLabel = label.cloneNode(true) as SVGTextElement;
+                      clonedLabel.setAttribute('x', '10'); 
+                      clonedLabel.setAttribute('y', (barY + (barH/2) + 5).toString());
+                      clonedLabel.setAttribute('fill', '#fff !important');
+                      clonedLabel.style.fontSize = '12px';
+                      clonedLabel.style.fontWeight = '700';
+                      clonedLabel.style.opacity = '1';
+                      labelsGroup.appendChild(clonedLabel);
+                      
+                      (label as HTMLElement).style.opacity = '0';
+                  }
+              }
+          });
+
+          // Ensure both sticky groups are at the end of the SVG (so they are on top)
+          const headerGroup = svg.querySelector('.sticky-header-group') as SVGGElement;
+          if (headerGroup) svg.appendChild(headerGroup);
+          svg.appendChild(labelsGroup);
+
+          // Scroll listeners
           if ((scrollWrapper as any)._stickyScrollHandler) {
              scrollWrapper.removeEventListener('scroll', (scrollWrapper as any)._stickyScrollHandler);
           }
           (scrollWrapper as any)._stickyScrollHandler = handleScroll;
           scrollWrapper.addEventListener('scroll', handleScroll);
-          
+
           // Trigger once immediately
           handleScroll();
       }
@@ -429,9 +492,9 @@ export default function GanttView() {
           </button>
         </div>
 
-        <div className="glass-panel p-0 overflow-hidden custom-gantt-theme">
-          <div className="w-full max-h-[600px] overflow-y-auto overflow-x-auto relative gantt-scroll-wrapper">
-             <div ref={ganttRef} className="w-full min-w-max"></div>
+        <div className="glass-panel p-0 overflow-hidden custom-gantt-theme flex-1 flex flex-col">
+          <div className="w-full h-full overflow-y-auto overflow-x-auto relative gantt-scroll-wrapper flex-1">
+             <div ref={ganttRef} className="w-full min-w-max h-full"></div>
           </div>
         </div>
       {contextMenu && (
