@@ -5,6 +5,15 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const PRESET_COLORS = [
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', 
+  '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#facc15'
+];
+
+function getRandomColor() {
+  return PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+}
+
 export async function GET() {
   try {
     // Fetch all events that have an external_id (iCal UID)
@@ -65,7 +74,7 @@ export async function POST(req: Request) {
       } else {
         const { data: newOrch, error: orchErr } = await supabase
           .from('orchestras')
-          .insert({ name: targetOrchestra, color: '#6366f1', is_active: true })
+          .insert({ name: targetOrchestra, color: getRandomColor(), is_active: true })
           .select()
           .single();
         if (orchErr) throw orchErr;
@@ -81,7 +90,7 @@ export async function POST(req: Request) {
       } else {
         const { data: newProj, error: projErr } = await supabase
           .from('projects')
-          .insert({ name: targetProject, orchestra_id: orchardId, color: '#6366f1', is_active: true })
+          .insert({ name: targetProject, orchestra_id: orchardId, color: getRandomColor(), is_active: true })
           .select()
           .single();
         if (projErr) throw projErr;

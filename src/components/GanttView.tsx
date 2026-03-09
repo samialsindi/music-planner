@@ -119,9 +119,9 @@ export default function GanttView() {
         headerBg.setAttribute('fill', '#111827');
         stickyHeader.appendChild(headerBg);
 
-        const ticks = svg.querySelectorAll('.tick');
-        ticks.forEach(tick => {
-            const cloned = tick.cloneNode(true) as SVGElement;
+        const headerItems = svg.querySelectorAll('.grid-header, .upper-text, .lower-text, .tick');
+        headerItems.forEach(item => {
+            const cloned = item.cloneNode(true) as SVGElement;
             stickyHeader?.appendChild(cloned);
         });
         
@@ -221,7 +221,8 @@ export default function GanttView() {
         .gantt .grid-row { fill: transparent !important; stroke: rgba(255,255,255,0.03) !important; }
         .gantt .today-highlight { fill: rgba(168, 85, 247, 0.1) !important; }
         .hidden-ghost-task { opacity: 0; pointer-events: none; }
-        ${projects.map(p => `.gantt-proj-${p.id.replace(/-/g, '\\-')} .bar { fill: ${p.color} !important; opacity: 0.8; }`).join('\n')}
+        ${projects.map(p => `[data-id="${p.id}"] .bar { fill: ${p.color} !important; opacity: 1 !important; }`).join('\n')}
+        .gantt .bar-progress { fill: rgba(255,255,255,0.1) !important; }
       `}</style>
     </div>
   );
