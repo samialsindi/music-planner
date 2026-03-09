@@ -190,11 +190,11 @@ export default function GanttView() {
 
       <div className="flex flex-1 overflow-hidden glass-panel border-white/5 relative">
         {/* Sticky Sidebar (Freeze Pane) */}
-        <div ref={sidebarRef} className="w-48 bg-gray-900/80 backdrop-blur-md border-r border-white/10 overflow-hidden flex flex-col z-20 pointer-events-none">
-          <div className="h-[50px] border-b border-white/10 flex items-center px-4 bg-gray-950/50">
+        <div className="w-48 bg-gray-900/80 backdrop-blur-md border-r border-white/10 overflow-hidden flex flex-col z-20">
+          <div className="h-[50px] border-b border-white/10 flex items-center px-4 bg-gray-950/50 shrink-0">
             <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Project</span>
           </div>
-          <div className="flex-1">
+          <div ref={sidebarRef} className="flex-1 overflow-hidden">
             {activeProjects.map((p, idx) => {
               const displayName = detectOrchestra(p.name) || p.name;
               return (
