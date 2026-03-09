@@ -187,23 +187,39 @@ export default function Home() {
       // 2. Process all-day events that are NOT personal
       for (const e of events) {
         if (!e) continue;
+        
+        let needsUpdate = false;
+        let updateData: any = {};
+
+        // Convert to 7pm - 10pm same day for rehearsals
         if (e.isAllDay && e.type !== 'personal') {
-          // Convert to 7pm - 10pm same day
           const newStart = new Date(e.startTime);
           newStart.setHours(19, 0, 0, 0); // 7 PM
 
           const newEnd = new Date(e.startTime);
           newEnd.setHours(22, 0, 0, 0); // 10 PM
 
-          updates.push(
-            supabase.from('events').update({
-              is_all_day: false,
-              start_time: newStart.toISOString(),
-              end_time: newEnd.toISOString(),
-              type: 'rehearsal' // Default to rehearsal as requested "rehearsal 7-10pm"
-            }).eq('id', e.id)
-          );
-          updatedCount++;
+          updateData = {
+            is_all_day: false,
+            start_time: newStart.toISOString(),
+            end_time: newEnd.toISOString(),
+            type: 'rehearsal' // Default to rehearsal as requested "rehearsal 7-10pm"
+          };
+          needsUpdate = true;
+        }
+
+        // Apply HSB abbreviation if missing
+        if (e.title && (e.title.toLowerCase().includes('haverhill silver band') || e.title.includes('Haverhill'))) {
+            updateData = {
+               ...updateData,
+               title: e.title.replace(/Haverhill Silver Band/i, 'HSB')
+            };
+            needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+            updates.push(supabase.from('events').update(updateData).eq('id', e.id));
+            updatedCount++;
         }
       }
 

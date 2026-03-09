@@ -110,7 +110,7 @@ export async function GET() {
             let projName = title.trim();
             let eventTitle = title.trim();
 
-            const parts = title.split(/\s*[-/]\s*/).filter(s => s.trim().length > 0);
+            const parts = title.split(/\s*[-/]\s*/).filter((s: string) => s.trim().length > 0);
             if (parts.length >= 3) {
                 orchName = parts[0];
                 projName = parts[1];
@@ -125,12 +125,34 @@ export async function GET() {
                 eventTitle = parts[0];
             }
 
+            // Apply abbreviation mapping
+            if (orchName.toLowerCase().includes('haverhill silver band') || orchName.toLowerCase() === 'hsb') {
+                orchName = 'HSB';
+            }
+
+            // Convert all-day rehearsals to 7pm-10pm
+            let finalIsAllDay = isAllDay;
+            let finalStartDate = startDate;
+            let finalEndDate = endDate;
+
+            if (isAllDay && eventType === 'rehearsal') {
+                finalIsAllDay = false;
+                
+                // Set start to 19:00 (7 PM)
+                finalStartDate = new Date(startDate);
+                finalStartDate.setUTCHours(19, 0, 0, 0);
+                
+                // Set end to 22:00 (10 PM)
+                finalEndDate = new Date(startDate);
+                finalEndDate.setUTCHours(22, 0, 0, 0);
+            }
+
             const baseEvent = {
                 _orchName: orchName,
                 _projName: projName,
                 title: eventTitle,
                 type: eventType,
-                is_all_day: isAllDay,
+                is_all_day: finalIsAllDay,
                 status: 'approved',
                 source: 'gcal',
                 external_id: uidMatch[1].trim(),
@@ -138,7 +160,7 @@ export async function GET() {
                 is_declined: false
             };
 
-            const duration = endDate.getTime() - startDate.getTime();
+            const duration = finalEndDate.getTime() - finalStartDate.getTime();
 
             if (rruleMatch) {
                 try {
@@ -152,13 +174,25 @@ export async function GET() {
                     const occurrences = rule.between(startDate, untilDate, true);
 
                     for (let j = 0; j < occurrences.length; j++) {
+                        // For repeating events, apply the exact same time adjustment logic as the base event
                         const occStart = occurrences[j];
-                        const occEnd = new Date(occStart.getTime() + duration);
+                        
+                        let finalOccStart = occStart;
+                        let finalOccEnd = new Date(occStart.getTime() + duration);
+                        
+                        if (isAllDay && eventType === 'rehearsal') {
+                             finalOccStart = new Date(occStart);
+                             finalOccStart.setUTCHours(19, 0, 0, 0);
+                             
+                             finalOccEnd = new Date(occStart);
+                             finalOccEnd.setUTCHours(22, 0, 0, 0);
+                        }
+
                         parsedEvents.push({
                             ...baseEvent,
                             id: `gcal-${uidMatch[1].trim()}-${j}`.toLowerCase(),
-                            start_time: occStart.toISOString(),
-                            end_time: occEnd.toISOString()
+                            start_time: finalOccStart.toISOString(),
+                            end_time: finalOccEnd.toISOString()
                         });
                     }
                 } catch (e) {
@@ -167,16 +201,16 @@ export async function GET() {
                     parsedEvents.push({
                         ...baseEvent,
                         id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-                        start_time: startDate.toISOString(),
-                        end_time: endDate.toISOString()
+                        start_time: finalStartDate.toISOString(),
+                        end_time: finalEndDate.toISOString()
                     });
                 }
             } else {
                 parsedEvents.push({
                     ...baseEvent,
                     id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-                    start_time: startDate.toISOString(),
-                    end_time: endDate.toISOString()
+                    start_time: finalStartDate.toISOString(),
+                    end_time: finalEndDate.toISOString()
                 });
             }
         }
