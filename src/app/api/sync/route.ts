@@ -83,10 +83,11 @@ export async function GET() {
             let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
             if (isAllDay) {
-                // All-day events in ICS have exclusive midnight end dates (e.g., 1 day event ends next day at 00:00).
-                // Subtracting 1 second makes it end at 23:59:59 on the correct final day, preventing UI spillover
-                // while preserving actual multi-day all-day events.
-                endDate = new Date(endDate.getTime() - 1000);
+                // All-day events in ICS have exclusive midnight end dates.
+                // Setting them to noon UTC prevents timezone shifts from pushing them to adjacent days in the UI.
+                startDate.setUTCHours(12, 0, 0, 0);
+                // Subtract 12 hours from the exclusive end midnight to land on noon of the actual final day.
+                endDate = new Date(endDate.getTime() - 12 * 60 * 60 * 1000);
             }
 
             const year = startDate.getFullYear();
@@ -106,11 +107,11 @@ export async function GET() {
                 eventType = 'concert';
             }
 
-            let orchName = title.trim();
-            let projName = title.trim();
+            let orchName = 'Personal';
+            let projName = 'Personal';
             let eventTitle = title.trim();
 
-            const parts = title.split(/\s*[-/]\s*/).filter((s: string) => s.trim().length > 0);
+            const parts = title.split(/\s+[-/]\s+/).filter((s: string) => s.trim().length > 0);
             if (parts.length >= 3) {
                 orchName = parts[0];
                 projName = parts[1];
@@ -120,9 +121,14 @@ export async function GET() {
                 projName = parts[0];
                 eventTitle = parts[1];
             } else if (parts.length === 1) {
-                orchName = parts[0];
-                projName = parts[0];
+                // Check if the event starts with a known ensemble abbreviation (e.g. "CGC rehearsal")
                 eventTitle = parts[0];
+                const firstWord = eventTitle.split(' ')[0].toUpperCase();
+                
+                if (['CGC', 'HSB'].includes(firstWord)) {
+                    orchName = firstWord;
+                    projName = firstWord;
+                }
             }
 
             // Apply abbreviation mapping
