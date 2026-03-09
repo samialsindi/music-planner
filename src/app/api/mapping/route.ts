@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       } else {
         const { data: newOrch, error: orchErr } = await supabase
           .from('orchestras')
-          .insert({ name: targetOrchestra, color: getRandomColor(), is_active: true })
+          .insert({ name: targetOrchestra, color: getRandomColor() })
           .select()
           .single();
         if (orchErr) throw orchErr;
