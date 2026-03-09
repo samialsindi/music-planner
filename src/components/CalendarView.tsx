@@ -10,6 +10,14 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { detectClashes } from '@/lib/clash';
 import { getRemappedDetails } from '@/lib/deontologies';
 
+// Configure moment to start the week on Monday
+moment.updateLocale('en', {
+  week: {
+    dow: 1, // Monday is the first day of the week
+    doy: 4  // The week that contains Jan 4th is the first week of the year
+  }
+});
+
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
