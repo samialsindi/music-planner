@@ -70,8 +70,10 @@ interface AppState {
   selectedClashEventId: string | null;
   calendarDate: Date;
   calendarView: 'month' | 'week' | 'day' | 'agenda';
+  highlightedEventId: string | null;
   
   // Actions
+  setHighlightedEventId: (id: string | null) => void;
   setSelectedClashEventId: (id: string | null) => void;
   toggleOrchestra: (orchestraId: string) => void;
   toggleProject: (projectId: string) => Promise<void>;
@@ -86,23 +88,46 @@ interface AppState {
   setCalendarDate: (date: Date) => void;
   setCalendarView: (view: 'month' | 'week' | 'day' | 'agenda') => void;
   undoLastAction: () => Promise<void>;
+  exportSettings: () => string;
+  importSettings: (json: string) => boolean;
 }
 
 const isBrowser = typeof window !== 'undefined';
 const defaultSettings: UserSettings = {
   hiddenProjectIds: [],
   hiddenEventIds: [],
-  eventTypeFilters: { rehearsal: true, concert: true, personal: true, other: true }
+  eventTypeFilters: { rehearsal: true, concert: true, personal: true, other: true },
 };
 export const useAppStore = create<AppState>((set, get) => ({
   orchestras: [],
   projects: [],
   events: [],
   selectedClashEventId: null,
+  highlightedEventId: null,
   calendarDate: new Date(),
   calendarView: 'month',
   settings: defaultSettings,
-  get eventTypeFilters() { return get().settings.eventTypeFilters; },
+  eventTypeFilters: defaultSettings.eventTypeFilters, // Initial value
+  
+  setHighlightedEventId: (id) => set({ highlightedEventId: id }),
+  
+  exportSettings: () => {
+    const { settings } = get();
+    return JSON.stringify(settings);
+  },
+
+  importSettings: (json) => {
+    try {
+      const parsed = JSON.parse(json);
+      if (typeof parsed === 'object' && parsed !== null) {
+        set({ settings: { ...get().settings, ...parsed } });
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to import settings:', e);
+    }
+    return false;
+  },
   
   setSelectedClashEventId: (id) => set({ selectedClashEventId: id }),
   setCalendarDate: (date) => set({ calendarDate: date }),

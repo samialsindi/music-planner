@@ -3,7 +3,7 @@
 import { useAppStore } from '@/lib/store';
 import { detectClashes } from '@/lib/clash';
 import moment from 'moment';
-
+import { ORCH_DEONTOLOGIES, ORCH_KEYWORDS, detectOrchestra } from '@/lib/deontologies';
 import { useState } from 'react';
 
 export default function ProjectToggles() {
@@ -118,7 +118,7 @@ export default function ProjectToggles() {
               
               <div className="flex items-center justify-between mb-4 pl-8 pr-2">
                 <h4 className="font-bold text-lg text-white pr-4">
-                  {orchestras.find(o => o.id === project.orchestraId)?.name} / {project.name}
+                  {detectOrchestra(orchestras.find(o => o.id === project.orchestraId)?.name || project.name) || project.name}
                 </h4>
                 <div className="flex shrink-0">
                   <button
@@ -255,6 +255,42 @@ export default function ProjectToggles() {
             Direct Sync to Google Cal
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.27l-3.26-1.5M2 22l10-10"/></svg>
           </button>
+
+          <div className="flex gap-2 mt-2">
+            <button
+               onClick={() => {
+                 const data = useAppStore.getState().exportSettings();
+                 const blob = new Blob([data], { type: 'application/json' });
+                 const url = URL.createObjectURL(blob);
+                 const a = document.createElement('a');
+                 a.href = url;
+                 a.download = 'metadata_export.json';
+                 a.click();
+               }}
+               className="flex-1 px-4 py-2 bg-purple-600/20 text-purple-400 border border-purple-500/50 rounded-lg text-xs font-bold hover:bg-purple-600/30 transition-all"
+            >
+              Export Metadata
+            </button>
+            <button
+               onClick={() => {
+                 const input = document.createElement('input');
+                 input.type = 'file';
+                 input.onchange = (e: any) => {
+                   const file = e.target.files[0];
+                   const reader = new FileReader();
+                   reader.onload = (event: any) => {
+                     const success = useAppStore.getState().importSettings(event.target.result);
+                     if (success) alert('Metadata imported!');
+                   };
+                   reader.readAsText(file);
+                 };
+                 input.click();
+               }}
+               className="flex-1 px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 rounded-lg text-xs font-bold hover:bg-indigo-600/30 transition-all"
+            >
+              Import Metadata
+            </button>
+          </div>
         </div>
       </div>
     </div>

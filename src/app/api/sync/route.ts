@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { rrulestr } from 'rrule';
+import { ORCH_DEONTOLOGIES, ORCH_KEYWORDS, detectOrchestra, cleanEventTitle } from '@/lib/deontologies';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,17 @@ export async function GET() {
             const filterDate = new Date('2026-03-09');
             if (startDate < filterDate) continue;
 
+            const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
+            const exdateMatches = block.match(/EXDATE(?:;[^:]+)?:(.*)\r?\n/g);
+            const exdates = new Set<string>();
+            if (exdateMatches) {
+                exdateMatches.forEach(m => {
+                    const dateStr = m.split(':')[1].trim();
+                     // EXDATE can be a comma-separated list
+                    dateStr.split(',').forEach(d => exdates.add(d.split('T')[0]));
+                });
+            }
+
             let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
             if (isAllDay) {
@@ -98,7 +110,6 @@ export async function GET() {
             const currentYear = new Date().getFullYear();
             if (year < currentYear - 1 || year > currentYear + 3) continue;
             const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
-            const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
             const isDailyRepeat = rruleMatch && rruleMatch[1].includes('FREQ=DAILY');
             const isMotDue = title.toUpperCase().includes('MOT DUE');
             if (isAllDay && (isDailyRepeat || isMotDue)) continue;
@@ -122,23 +133,35 @@ export async function GET() {
             let projName = 'Personal';
             let eventTitle = title.trim();
 
-            const parts = title.split(/\s+[-/]\s+/).filter((s: string) => s.trim().length > 0);
-            if (parts.length >= 3) {
-                orchName = parts[0];
-                projName = parts[1];
-                eventTitle = parts.slice(2).join(' - ');
-            } else if (parts.length === 2) {
-                orchName = parts[0];
-                projName = parts[0];
-                eventTitle = parts[1];
-            } else if (parts.length === 1) {
-                // Check if the event starts with a known ensemble abbreviation (e.g. "CGC rehearsal")
-                eventTitle = parts[0];
-                const firstWord = eventTitle.split(' ')[0].toUpperCase();
-
-                if (['CGC', 'HSB'].includes(firstWord)) {
-                    orchName = firstWord;
-                    projName = firstWord;
+            const detectedOrch = detectOrchestra(title);
+            if (detectedOrch) {
+                orchName = detectedOrch;
+                eventTitle = cleanEventTitle(title, detectedOrch);
+                
+                // If the cleaned title is just common event types, the project is the orchestra itself
+                const genericNames = ['rehearsal', 'reh', 'concert', 'performance', 'show', 'session', 'gig'];
+                if (!eventTitle || genericNames.some(g => eventTitle.toLowerCase() === g)) {
+                    projName = detectedOrch;
+                } else {
+                    projName = eventTitle;
+                }
+            } else {
+                const parts = title.split(/\s+[-/]\s+/).filter((s: string) => s.trim().length > 0);
+                if (parts.length >= 3) {
+                    orchName = parts[0];
+                    projName = parts[1];
+                    eventTitle = parts.slice(2).join(' - ');
+                } else if (parts.length === 2) {
+                    orchName = parts[0];
+                    projName = parts[0];
+                    eventTitle = parts[1];
+                } else if (parts.length === 1) {
+                    eventTitle = parts[0];
+                    const firstWord = eventTitle.split(' ')[0].toUpperCase();
+                    if (['CGC', 'HSB'].includes(firstWord)) {
+                        orchName = firstWord;
+                        projName = firstWord;
+                    }
                 }
             }
 
@@ -191,8 +214,11 @@ export async function GET() {
                     const occurrences = rule.between(startDate, untilDate, true);
 
                     for (let j = 0; j < occurrences.length; j++) {
-                        // For repeating events, apply the exact same time adjustment logic as the base event
                         const occStart = occurrences[j];
+                        
+                        // Check if this occurrence is in EXDATE list
+                        const occDateStr = occStart.toISOString().split('T')[0].replace(/-/g, '');
+                        if (exdates.has(occDateStr)) continue;
 
                         let finalOccStart = occStart;
                         let finalOccEnd = new Date(occStart.getTime() + duration);

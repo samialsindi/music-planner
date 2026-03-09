@@ -8,12 +8,13 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { detectClashes } from '@/lib/clash';
+import { getRemappedDetails } from '@/lib/deontologies';
 
 const localizer = momentLocalizer(moment);
 const DnDCalendar = withDragAndDrop(Calendar);
 
 export default function CalendarView() {
-  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType, selectedClashEventId, setSelectedClashEventId, settings, undoLastAction, calendarDate, calendarView, setCalendarDate, setCalendarView } = useAppStore();
+  const { events, projects, toggleEvent, eventTypeFilters, toggleEventType, selectedClashEventId, setSelectedClashEventId, settings, undoLastAction, calendarDate, calendarView, setCalendarDate, setCalendarView, highlightedEventId, setHighlightedEventId } = useAppStore();
   const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
   const longPressProps = useLongPress((e: any) => {
     if (e.touches) e.preventDefault();
@@ -66,15 +67,17 @@ export default function CalendarView() {
       const project = projects.find(p => p.id === e.projectId);
       const orchestra = project ? orchestras.find(o => o.id === project.orchestraId) : null;
 
-      // Build a non-redundant label: skip parts that duplicate the event title
+      // Use the shared remapping logic to get clean names
+      const { orchName, projName, eventTitle } = getRemappedDetails(e, projects, orchestras);
+
       const parts: string[] = [];
-      if (orchestra && orchestra.name !== project?.name && orchestra.name !== e.title) {
-        parts.push(orchestra.name);
+      if (orchName !== 'Personal' && !eventTitle.toLowerCase().includes(orchName.toLowerCase())) {
+          parts.push(orchName);
       }
-      if (project && project.name !== e.title) {
-        parts.push(project.name);
+      if (projName !== 'Personal' && projName !== orchName && !eventTitle.toLowerCase().includes(projName.toLowerCase())) {
+          parts.push(projName);
       }
-      parts.push(e.title);
+      parts.push(eventTitle);
       const fullTitle = parts.join(' - ');
 
       return {
@@ -83,7 +86,7 @@ export default function CalendarView() {
         start: new Date(e.startTime),
         end: new Date(e.endTime),
         allDay: e.isAllDay,
-        resource: e,
+        resource: { ...e, type: (orchName !== 'Personal') ? (e.type === 'personal' ? 'rehearsal' : e.type) : e.type },
       };
     });
 
@@ -142,7 +145,16 @@ export default function CalendarView() {
       }
     }
 
+    // Pulsing Ring for Gantt -> Calendar Navigation
+    if (highlightedEventId === event.id) {
+        backgroundColor = '#a855f7'; // Bright purple
+        borderColor = '#fff';
+        opacity = 1;
+        borderLeft = `4px solid #fff`;
+    }
+
     return {
+      className: highlightedEventId === event.id ? 'highlight-ring-anim' : '',
       style: {
         backgroundColor,
         borderColor,
@@ -251,7 +263,16 @@ export default function CalendarView() {
       )}
 
       {editingEvent && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div 
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        onKeyDown={(e) => {
+            if (e.key === 'Escape') setEditingEvent(null);
+            if (e.key === 'Enter') {
+                const markPersonalBtn = document.getElementById('mark-personal-btn');
+                if (markPersonalBtn) markPersonalBtn.click();
+            }
+        }}
+      >
         <div className="bg-gray-900 border border-white/10 rounded-xl p-6 w-[400px] max-w-full shadow-2xl">
           <h3 className="text-xl font-bold text-white mb-4">Edit Event</h3>
           <div className="space-y-4">
@@ -382,6 +403,7 @@ export default function CalendarView() {
                     title: editingEvent.title
                   }).eq("id", updated.id);
                 }}
+                id="mark-personal-btn"
                 className="text-slate-300 text-sm font-medium hover:text-slate-200 transition-colors bg-slate-500/20 px-3 py-1.5 rounded"
               >
                 Mark Personal
