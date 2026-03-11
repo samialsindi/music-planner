@@ -12,7 +12,7 @@ export const ORCH_DEONTOLOGIES = [
 
 export const ORCH_KEYWORDS = [
     'Concert Band', 'Symphony Chorus', 'Symphony', 'Choir', 'Chorus', 'Band', 
-    'Orchestra', 'Philharmonic', 'Ensemble', 'Wind Band', 'Brass Band'
+    'Orchestra', 'Philharmonic', 'Philharmonia', 'Sinfonia', 'Ensemble', 'Wind Band', 'Brass Band'
 ];
 
 export function detectOrchestra(text: string): string | null {

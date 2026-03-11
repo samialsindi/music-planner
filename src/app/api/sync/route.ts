@@ -43,9 +43,11 @@ export async function GET() {
         const icsData = await response.text();
 
         // Wipe the old monolithic Google Calendar project and its events
-        await supabase.from('projects').delete().eq('name', 'Google Calendar');
         await supabase.from('projects').delete().eq('name', 'Google Calendar Sync');
         await supabase.from('orchestras').delete().eq('name', 'Google Calendar Sync');
+        
+        // Wipe old synced events before the filter date to ensure "only new events" are present
+        await supabase.from('events').delete().eq('source', 'gcal').lt('start_time', '2026-03-09T00:00:00Z');
 
         const parsedEvents: any[] = [];
         const events = icsData.split('BEGIN:VEVENT');
