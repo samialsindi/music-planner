@@ -9,7 +9,7 @@ import moment from 'moment';
 import { ORCH_DEONTOLOGIES, ORCH_KEYWORDS, detectOrchestra } from '@/lib/deontologies';
 
 export default function GanttView() {
-  const { events, projects, eventTypeFilters, settings, setCalendarDate, setCalendarView, highlightedEventId, setHighlightedEventId } = useAppStore();
+  const { events, projects, orchestras, eventTypeFilters, settings, setCalendarDate, setCalendarView, highlightedEventId, setHighlightedEventId } = useAppStore();
   const [contextMenu, setContextMenu] = useState<{x: number, y: number} | null>(null);
   const ganttRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -157,7 +157,7 @@ export default function GanttView() {
               const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
               r.setAttribute('x', (bX + startOff * bW).toString());
               r.setAttribute('y', bY.toString());
-              r.setAttribute('width', Math.max(2, durRatio * bW).toString());
+              r.setAttribute('width', Math.max(0, durRatio * bW).toString());
               r.setAttribute('height', bH.toString());
               r.setAttribute('fill', 'rgba(255,255,255,0.3)');
               r.setAttribute('rx', '2');
@@ -196,10 +196,24 @@ export default function GanttView() {
           </div>
           <div ref={sidebarRef} className="flex-1 overflow-hidden">
             {activeProjects.map((p, idx) => {
-              const displayName = detectOrchestra(p.name) || p.name;
+              const orch = orchestras.find(o => o.id === p.orchestraId);
+              const orchName = orch?.name || 'Personal';
+              
+              const genericNames = ['rehearsal', 'reh', 'concert', 'performance', 'show', 'session', 'gig', 'personal'];
+              const isGeneric = genericNames.some(g => p.name.toLowerCase().includes(g));
+              
+              let displayName = p.name;
+              if (isGeneric && orchName !== 'Personal') {
+                  displayName = `${orchName} - ${p.name}`;
+              } else if (p.name === 'Personal' || p.name === 'other') {
+                  displayName = orchName;
+              } else if (orchName !== 'Personal' && !p.name.toLowerCase().includes(orchName.toLowerCase())) {
+                  displayName = `${orchName} - ${p.name}`;
+              }
+              
               return (
                 <div key={p.id} className="h-[43px] flex items-center px-4 border-b border-white/5" style={{ height: '43px' }}>
-                  <span className="text-xs font-semibold text-gray-200 truncate">{displayName}</span>
+                  <span className="text-xs font-semibold text-gray-200 truncate" title={displayName}>{displayName}</span>
                 </div>
               );
             })}
