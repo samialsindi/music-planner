@@ -9,10 +9,9 @@ export default function DeclinedPage() {
   const declinedEvents = events.filter(e => e && e.isDeclined);
 
   const handleUndecline = async (eventId: string) => {
-    // Optimistic UI update
-    updateEvent({ id: eventId, isDeclined: false } as any);
+    // Optimistic UI update (merges into existing event via store's updateEvent)
+    await updateEvent({ id: eventId, isDeclined: false });
 
-    // Persist to Supabase
     try {
       const { error } = await supabase
         .from('events')
@@ -22,8 +21,7 @@ export default function DeclinedPage() {
       if (error) throw error;
     } catch (error) {
       console.error('Failed to undecline event:', error);
-      // Revert if error
-      updateEvent({ id: eventId, isDeclined: true } as any);
+      await updateEvent({ id: eventId, isDeclined: true });
     }
   };
 

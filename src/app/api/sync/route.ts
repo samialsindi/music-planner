@@ -1,355 +1,355 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { rrulestr } from 'rrule';
-import { ORCH_DEONTOLOGIES, ORCH_KEYWORDS, detectOrchestra, cleanEventTitle } from '@/lib/deontologies';
+import { detectOrchestra, cleanEventTitle } from '@/lib/deontologies';
+import { listSourceEvents, loadTokens, isConnected, saveTokens } from '@/lib/google';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-    let url = process.env.GCAL_ICS_URL;
+interface RawEvent {
+  title: string;
+  start: Date;
+  end: Date;
+  isAllDay: boolean;
+  uid: string;
+  recurrenceIndex?: number;
+}
 
-    if (!url) {
-        // Try to find any env var that looks like a Google Calendar URL or has CAL/ICS in the name
-        const possibleKeys = Object.keys(process.env).filter(key =>
-            key.toUpperCase().includes('CAL') ||
-            key.toUpperCase().includes('ICS') ||
-            key.toUpperCase().includes('URL')
-        );
+const READ_LOOKBACK_DAYS = 7;
+const READ_LOOKAHEAD_YEARS = 2;
+const MIN_DURATION_MS = 30 * 60 * 1000;
 
-        for (const key of possibleKeys) {
-            const val = process.env[key];
-            if (typeof val === 'string' && (val.includes('calendar.google.com') || val.endsWith('.ics'))) {
-                url = val;
-                break;
-            }
-        }
+function readWindow() {
+  const timeMin = new Date(Date.now() - READ_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const timeMax = new Date(Date.now() + READ_LOOKAHEAD_YEARS * 365 * 24 * 60 * 60 * 1000);
+  return { timeMin, timeMax };
+}
+
+function findIcsUrl(): string | null {
+  const explicit = process.env.GCAL_ICS_URL;
+  if (explicit) return explicit;
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v !== 'string') continue;
+    const upper = k.toUpperCase();
+    if ((upper.includes('CAL') || upper.includes('ICS') || upper.includes('URL'))
+        && (v.includes('calendar.google.com') || v.endsWith('.ics'))) {
+      return v;
+    }
+  }
+  return null;
+}
+
+function parseICSDate(s: string): Date {
+  if (s.length === 8) {
+    return new Date(`${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}T00:00:00Z`);
+  }
+  return new Date(
+    `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}T` +
+    `${s.substring(9, 11)}:${s.substring(11, 13)}:${s.substring(13, 15)}Z`,
+  );
+}
+
+async function fetchViaICS(url: string, timeMin: Date, timeMax: Date): Promise<RawEvent[]> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Failed to fetch ICS file');
+  const ics = await response.text();
+  const blocks = ics.split('BEGIN:VEVENT');
+  const out: RawEvent[] = [];
+
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    const summaryMatch = block.match(/SUMMARY:(.*)\r?\n/);
+    const dtstartMatch = block.match(/DTSTART(?:;[^:]+)?:(.*)\r?\n/);
+    const dtendMatch = block.match(/DTEND(?:;[^:]+)?:(.*)\r?\n/);
+    const uidMatch = block.match(/UID:(.*)\r?\n/);
+    if (!dtstartMatch || !uidMatch) continue;
+
+    const startDate = parseICSDate(dtstartMatch[1]);
+    const isAllDay = dtstartMatch[1].length === 8;
+    if (startDate < timeMin) continue;
+
+    let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
+    if (isAllDay) {
+      startDate.setUTCHours(12, 0, 0, 0);
+      endDate = new Date(endDate.getTime() - 12 * 60 * 60 * 1000);
     }
 
-    if (!url) {
-        return NextResponse.json({ error: 'Missing GCAL_ICS_URL env variable.' }, { status: 400 });
+    const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
+    const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
+    const exdateMatches = block.match(/EXDATE(?:;[^:]+)?:(.*)\r?\n/g);
+    const exdates = new Set<string>();
+    exdateMatches?.forEach(m => {
+      m.split(':')[1].trim().split(',').forEach(d => exdates.add(d.split('T')[0]));
+    });
+
+    const duration = endDate.getTime() - startDate.getTime();
+    const uid = uidMatch[1].trim();
+
+    if (rruleMatch) {
+      try {
+        const rule = rrulestr(`DTSTART:${dtstartMatch[1].trim()}\nRRULE:${rruleMatch[1].trim()}`);
+        const occurrences = rule.between(startDate, timeMax, true);
+        occurrences.forEach((occStart, idx) => {
+          const occDateStr = occStart.toISOString().split('T')[0].replace(/-/g, '');
+          if (exdates.has(occDateStr)) return;
+          out.push({
+            title, isAllDay, uid, recurrenceIndex: idx,
+            start: occStart,
+            end: new Date(occStart.getTime() + duration),
+          });
+        });
+      } catch {
+        out.push({ title, isAllDay, uid, start: startDate, end: endDate });
+      }
+    } else {
+      out.push({ title, isAllDay, uid, start: startDate, end: endDate });
+    }
+  }
+  return out;
+}
+
+async function fetchViaOAuth(req: Request, timeMin: Date, timeMax: Date): Promise<RawEvent[] | null> {
+  const tokens = await loadTokens();
+  if (!isConnected(tokens)) return null;
+
+  // Try incremental sync first when we have a token; fall back to full list on 410.
+  let result = await listSourceEvents({ timeMin, timeMax, syncToken: tokens?.sync_token || null }, req);
+  if (!result.ok && result.reason === 'sync_token_expired') {
+    result = await listSourceEvents({ timeMin, timeMax, syncToken: null }, req);
+  }
+  if (!result.ok) return null;
+  if (result.nextSyncToken) await saveTokens({ sync_token: result.nextSyncToken });
+
+  const out: RawEvent[] = [];
+  for (const e of result.items) {
+    if (!e.id || e.status === 'cancelled') continue;
+    const title = e.summary || 'Busy';
+    const isAllDay = !!e.start?.date;
+    const start = e.start?.dateTime
+      ? new Date(e.start.dateTime)
+      : e.start?.date
+        ? (() => { const d = new Date(`${e.start!.date}T12:00:00Z`); return d; })()
+        : null;
+    const end = e.end?.dateTime
+      ? new Date(e.end.dateTime)
+      : e.end?.date
+        ? (() => { const d = new Date(`${e.end!.date}T12:00:00Z`); return new Date(d.getTime() - 12 * 60 * 60 * 1000); })()
+        : null;
+    if (!start || !end) continue;
+    if (start < timeMin) continue;
+    out.push({ title, start, end, isAllDay, uid: e.iCalUID || e.id });
+  }
+  return out;
+}
+
+function classifyType(title: string, isAllDay: boolean): { type: 'rehearsal' | 'concert' | 'other'; finalStart: Date; finalEnd: Date; finalIsAllDay: boolean } | null {
+  let type: 'rehearsal' | 'concert' | 'other' = 'other';
+  const lower = title.toLowerCase();
+  if (lower.includes('rehearsal') || lower.includes('reh')) type = 'rehearsal';
+  else if (lower.includes('concert') || lower.includes('performance') || lower.includes('show')) type = 'concert';
+
+  return { type, finalStart: new Date(), finalEnd: new Date(), finalIsAllDay: isAllDay };
+}
+
+function mapRawToEventRow(raw: RawEvent): any | null {
+  const title = raw.title;
+  const lower = title.toLowerCase();
+
+  // Skip noisy all-day repeats
+  const isMotDue = title.toUpperCase().includes('MOT DUE');
+  if (raw.isAllDay && isMotDue) return null;
+
+  let eventType: 'rehearsal' | 'concert' | 'other' = 'other';
+  if (lower.includes('rehearsal') || lower.includes('reh')) eventType = 'rehearsal';
+  else if (lower.includes('concert') || lower.includes('performance') || lower.includes('show')) eventType = 'concert';
+
+  // Drop sub-30-min events that are not all-day
+  if (!raw.isAllDay && raw.end.getTime() - raw.start.getTime() <= MIN_DURATION_MS) return null;
+
+  let orchName = 'Personal';
+  let projName = 'Personal';
+  let eventTitle = title.trim();
+
+  const detected = detectOrchestra(title);
+  if (detected) {
+    orchName = detected;
+    eventTitle = cleanEventTitle(title, detected);
+    const generic = ['rehearsal', 'reh', 'concert', 'performance', 'show', 'session', 'gig'];
+    projName = (!eventTitle || generic.some(g => eventTitle.toLowerCase() === g)) ? detected : eventTitle;
+  } else {
+    const parts = title.split(/\s+[-/]\s+/).filter(s => s.trim().length > 0);
+    if (parts.length >= 3) { orchName = parts[0]; projName = parts[1]; eventTitle = parts.slice(2).join(' - '); }
+    else if (parts.length === 2) { orchName = parts[0]; projName = parts[0]; eventTitle = parts[1]; }
+    else if (parts.length === 1) {
+      eventTitle = parts[0];
+      const firstWord = eventTitle.split(' ')[0].toUpperCase();
+      if (['CGC', 'HSB'].includes(firstWord)) { orchName = firstWord; projName = firstWord; }
+    }
+  }
+
+  if (orchName.toLowerCase().includes('haverhill silver band') || orchName.toLowerCase() === 'hsb') {
+    orchName = 'HSB';
+  }
+
+  // All-day rehearsals → 7pm–10pm local-day window
+  let finalIsAllDay = raw.isAllDay;
+  let finalStart = raw.start;
+  let finalEnd = raw.end;
+  if (raw.isAllDay && eventType === 'rehearsal') {
+    finalIsAllDay = false;
+    finalStart = new Date(raw.start);
+    finalStart.setUTCHours(19, 0, 0, 0);
+    finalEnd = new Date(raw.start);
+    finalEnd.setUTCHours(22, 0, 0, 0);
+  }
+
+  const id = raw.recurrenceIndex !== undefined
+    ? `gcal-${raw.uid}-${raw.recurrenceIndex}`.toLowerCase()
+    : `gcal-${raw.uid}`.toLowerCase();
+
+  return {
+    _orchName: orchName,
+    _projName: projName,
+    _defaultType: eventType,
+    id,
+    title: eventTitle,
+    start_time: finalStart.toISOString(),
+    end_time: finalEnd.toISOString(),
+    is_all_day: finalIsAllDay,
+    status: 'approved',
+    source: 'gcal',
+    external_id: raw.uid,
+  };
+}
+
+export async function GET(req: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+  );
+
+  try {
+    // Prune audit log entries older than 30 days; preserve recent undo history across syncs.
+    const cutoffAudit = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('audit_log').delete().lt('created_at', cutoffAudit);
+
+    // Clean up old monolithic catch-all rows from earlier versions. Safe no-op if absent.
+    await supabase.from('projects').delete().eq('name', 'Google Calendar Sync');
+    await supabase.from('orchestras').delete().eq('name', 'Google Calendar Sync');
+
+    const { timeMin, timeMax } = readWindow();
+
+    // Prefer OAuth API when connected; fall back to ICS scrape.
+    let rawEvents: RawEvent[] | null = await fetchViaOAuth(req, timeMin, timeMax);
+    let source: 'oauth' | 'ics' = 'oauth';
+    if (!rawEvents) {
+      const icsUrl = findIcsUrl();
+      if (!icsUrl) {
+        return NextResponse.json({
+          error: 'No source configured. Connect Google Calendar via /settings or set GCAL_ICS_URL.',
+        }, { status: 400 });
+      }
+      rawEvents = await fetchViaICS(icsUrl, timeMin, timeMax);
+      source = 'ics';
     }
 
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    );
-
-    try {
-        // Clear audit log to prevent undoing stale IDs
-        await supabase.from('audit_log').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to fetch ICS file");
-        const icsData = await response.text();
-
-        // Wipe the old monolithic Google Calendar project and its events
-        await supabase.from('projects').delete().eq('name', 'Google Calendar Sync');
-        await supabase.from('orchestras').delete().eq('name', 'Google Calendar Sync');
-        
-        // Wipe old synced events before the filter date to ensure "only new events" are present
-        await supabase.from('events').delete().eq('source', 'gcal').lt('start_time', '2026-03-09T00:00:00Z');
-
-        const parsedEvents: any[] = [];
-        const events = icsData.split('BEGIN:VEVENT');
-
-        // Skip the first block (VCALENDAR header)
-        for (let i = 1; i < events.length; i++) {
-            const block = events[i];
-
-            const summaryMatch = block.match(/SUMMARY:(.*)\r?\n/);
-            const dtstartMatch = block.match(/DTSTART(?:;[^:]+)?:(.*)\r?\n/);
-            const dtendMatch = block.match(/DTEND(?:;[^:]+)?:(.*)\r?\n/);
-            const uidMatch = block.match(/UID:(.*)\r?\n/);
-
-            if (!dtstartMatch || !uidMatch) continue;
-
-            // Parse standard ICS date format: YYYYMMDDTHHMMSSZ
-            const parseICSDate = (icsDateStr: string) => {
-                if (icsDateStr.length === 8) { // All day event (YYYYMMDD)
-                    const y = icsDateStr.substring(0, 4);
-                    const m = icsDateStr.substring(4, 6);
-                    const d = icsDateStr.substring(6, 8);
-                    return new Date(`${y}-${m}-${d}T00:00:00Z`);
-                }
-                const y = icsDateStr.substring(0, 4);
-                const m = icsDateStr.substring(4, 6);
-                const d = icsDateStr.substring(6, 8);
-                const h = icsDateStr.substring(9, 11);
-                const min = icsDateStr.substring(11, 13);
-                const s = icsDateStr.substring(13, 15);
-                return new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
-            };
-
-            const startDate = parseICSDate(dtstartMatch[1]);
-            const isAllDay = dtstartMatch[1].length === 8;
-
-            // --- USER FILTER: Only sync events from March 9th, 2026 onwards ---
-            const filterDate = new Date('2026-03-09');
-            if (startDate < filterDate) continue;
-
-            const rruleMatch = block.match(/RRULE:(.*)\r?\n/);
-            const exdateMatches = block.match(/EXDATE(?:;[^:]+)?:(.*)\r?\n/g);
-            const exdates = new Set<string>();
-            if (exdateMatches) {
-                exdateMatches.forEach(m => {
-                    const dateStr = m.split(':')[1].trim();
-                     // EXDATE can be a comma-separated list
-                    dateStr.split(',').forEach(d => exdates.add(d.split('T')[0]));
-                });
-            }
-
-            let endDate = dtendMatch ? parseICSDate(dtendMatch[1]) : new Date(startDate.getTime() + 60 * 60 * 1000);
-
-            if (isAllDay) {
-                // All-day events in ICS have exclusive midnight end dates.
-                // Setting them to noon UTC prevents timezone shifts from pushing them to adjacent days in the UI.
-                startDate.setUTCHours(12, 0, 0, 0);
-                // Subtract 12 hours from the exclusive end midnight to land on noon of the actual final day.
-                endDate = new Date(endDate.getTime() - 12 * 60 * 60 * 1000);
-            }
-
-            const year = startDate.getFullYear();
-            const currentYear = new Date().getFullYear();
-            if (year < currentYear - 1 || year > currentYear + 3) continue;
-            const title = summaryMatch ? summaryMatch[1].trim() : 'Busy';
-            const isDailyRepeat = rruleMatch && rruleMatch[1].includes('FREQ=DAILY');
-            const isMotDue = title.toUpperCase().includes('MOT DUE');
-            if (isAllDay && (isDailyRepeat || isMotDue)) continue;
-
-            // --- USER FILTER: Skip events shorter than or equal to 30 minutes ---
-            const durationMs = endDate.getTime() - startDate.getTime();
-            if (durationMs <= 30 * 60 * 1000 && !isAllDay) {
-                // Short event, skip it
-                continue;
-            }
-
-            let eventType: 'rehearsal' | 'concert' | 'other' = 'other';
-            const lowerTitle = title.toLowerCase();
-            if (lowerTitle.includes('rehearsal') || lowerTitle.includes('reh')) {
-                eventType = 'rehearsal';
-            } else if (lowerTitle.includes('concert') || lowerTitle.includes('performance') || lowerTitle.includes('show')) {
-                eventType = 'concert';
-            }
-
-            let orchName = 'Personal';
-            let projName = 'Personal';
-            let eventTitle = title.trim();
-
-            const detectedOrch = detectOrchestra(title);
-            if (detectedOrch) {
-                orchName = detectedOrch;
-                eventTitle = cleanEventTitle(title, detectedOrch);
-                
-                // If the cleaned title is just common event types, the project is the orchestra itself
-                const genericNames = ['rehearsal', 'reh', 'concert', 'performance', 'show', 'session', 'gig'];
-                if (!eventTitle || genericNames.some(g => eventTitle.toLowerCase() === g)) {
-                    projName = detectedOrch;
-                } else {
-                    projName = eventTitle;
-                }
-            } else {
-                const parts = title.split(/\s+[-/]\s+/).filter((s: string) => s.trim().length > 0);
-                if (parts.length >= 3) {
-                    orchName = parts[0];
-                    projName = parts[1];
-                    eventTitle = parts.slice(2).join(' - ');
-                } else if (parts.length === 2) {
-                    orchName = parts[0];
-                    projName = parts[0];
-                    eventTitle = parts[1];
-                } else if (parts.length === 1) {
-                    eventTitle = parts[0];
-                    const firstWord = eventTitle.split(' ')[0].toUpperCase();
-                    if (['CGC', 'HSB'].includes(firstWord)) {
-                        orchName = firstWord;
-                        projName = firstWord;
-                    }
-                }
-            }
-
-            // Apply abbreviation mapping
-            if (orchName.toLowerCase().includes('haverhill silver band') || orchName.toLowerCase() === 'hsb') {
-                orchName = 'HSB';
-            }
-
-            // Convert all-day rehearsals to 7pm-10pm
-            let finalIsAllDay = isAllDay;
-            let finalStartDate = startDate;
-            let finalEndDate = endDate;
-
-            if (isAllDay && eventType === 'rehearsal') {
-                finalIsAllDay = false;
-
-                // Set start to 19:00 (7 PM)
-                finalStartDate = new Date(startDate);
-                finalStartDate.setUTCHours(19, 0, 0, 0);
-
-                // Set end to 22:00 (10 PM)
-                finalEndDate = new Date(startDate);
-                finalEndDate.setUTCHours(22, 0, 0, 0);
-            }
-
-            const baseEvent = {
-                _orchName: orchName,
-                _projName: projName,
-                title: eventTitle,
-                type: eventType,
-                is_all_day: finalIsAllDay,
-                status: 'approved',
-                source: 'gcal',
-                external_id: uidMatch[1].trim(),
-                is_toggled: true,
-                is_declined: false
-            };
-
-            const duration = finalEndDate.getTime() - finalStartDate.getTime();
-
-            if (rruleMatch) {
-                try {
-                    // Extract exact string without trailing carriage return
-                    const rruleStr = rruleMatch[1].trim();
-                    // Setup rrule with the start date (ignoring timezone issues by relying on rrule's string parsing)
-                    const rule = rrulestr(`DTSTART:${dtstartMatch[1].trim()}\nRRULE:${rruleStr}`);
-
-                    // Generate occurrences until end of 2027
-                    const untilDate = new Date('2027-12-31T23:59:59Z');
-                    const occurrences = rule.between(startDate, untilDate, true);
-
-                    for (let j = 0; j < occurrences.length; j++) {
-                        const occStart = occurrences[j];
-                        
-                        // Check if this occurrence is in EXDATE list
-                        const occDateStr = occStart.toISOString().split('T')[0].replace(/-/g, '');
-                        if (exdates.has(occDateStr)) continue;
-
-                        let finalOccStart = occStart;
-                        let finalOccEnd = new Date(occStart.getTime() + duration);
-
-                        if (isAllDay && eventType === 'rehearsal') {
-                            finalOccStart = new Date(occStart);
-                            finalOccStart.setUTCHours(19, 0, 0, 0);
-
-                            finalOccEnd = new Date(occStart);
-                            finalOccEnd.setUTCHours(22, 0, 0, 0);
-                        }
-
-                        parsedEvents.push({
-                            ...baseEvent,
-                            id: `gcal-${uidMatch[1].trim()}-${j}`.toLowerCase(),
-                            start_time: finalOccStart.toISOString(),
-                            end_time: finalOccEnd.toISOString()
-                        });
-                    }
-                } catch (e) {
-                    console.error('Error parsing RRULE for event:', title, e);
-                    // Fallback to single event
-                    parsedEvents.push({
-                        ...baseEvent,
-                        id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-                        start_time: finalStartDate.toISOString(),
-                        end_time: finalEndDate.toISOString()
-                    });
-                }
-            } else {
-                parsedEvents.push({
-                    ...baseEvent,
-                    id: `gcal-${uidMatch[1].trim()}`.toLowerCase(),
-                    start_time: finalStartDate.toISOString(),
-                    end_time: finalEndDate.toISOString()
-                });
-            }
-        }
-
-        if (parsedEvents.length > 0) {
-            const colors = [
-                '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
-                '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#f43f5e'
-            ];
-            let colorIdx = 0;
-            const getNextColor = () => colors[colorIdx++ % colors.length];
-
-            // Create unique orchestrations
-            const uniqueOrchNames = [...new Set(parsedEvents.map(e => e._orchName))];
-            for (const name of uniqueOrchNames) {
-                await supabase.from('orchestras').insert({ name, color: getNextColor() }).select().single().then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
-            }
-            // Fetch all known orchestras to map names to IDs correctly
-            const { data: allOrchs } = await supabase.from('orchestras').select('id, name').limit(5000);
-            const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
-
-            // Create unique projects
-            const uniqueProjs = new Map(); // key: "orch_id-projName"
-            for (const e of parsedEvents) {
-                const oId = orchMap.get(e._orchName);
-                if (oId) uniqueProjs.set(`${oId}-${e._projName}`, { orchestra_id: oId, name: e._projName });
-            }
-
-            for (const proj of uniqueProjs.values()) {
-                const { data: existing } = await supabase.from('projects').select('id').eq('name', proj.name).eq('orchestra_id', proj.orchestra_id).maybeSingle();
-                if (!existing) {
-                    await supabase.from('projects').insert({ ...proj, color: getNextColor() }).select().single();
-                }
-            }
-
-            // Fetch all known projects to map names to IDs correctly
-            const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id').limit(5000);
-            const projMap = new Map(allProjs?.map(p => [`${p.orchestra_id}-${p.name}`, p.id]) || []);
-
-            // Map project_id back to events
-            for (const e of parsedEvents) {
-                const oId = orchMap.get(e._orchName);
-                const pId = projMap.get(`${oId}-${e._projName}`);
-                if (pId) {
-                    e.project_id = pId;
-                } else {
-                    console.warn(`Could not find project ID for ${e._projName}`);
-                }
-                delete e._orchName;
-                delete e._projName;
-            }
-
-            // Filter out any events that failed to map
-            const validEvents = parsedEvents.filter(e => e.project_id);
-
-            // Deduplicate and apply final filters (>= 2026-03-09 and > 30 mins)
-            const uniqueEventsMap = new Map();
-            for (const event of validEvents) {
-                const start = new Date(event.start_time);
-                const end = new Date(event.end_time);
-                const dur = end.getTime() - start.getTime();
-                
-                if (start >= new Date('2026-03-09') && (dur > 30 * 60 * 1000 || event.is_all_day)) {
-                    uniqueEventsMap.set(event.id, event);
-                }
-            }
-            const uniqueEvents = Array.from(uniqueEventsMap.values());
-
-            // Backward Immutability logic: Events starting before today at 13:30 should not be overwritten if they already exist
-            const threshold = new Date();
-            threshold.setHours(13, 30, 0, 0);
-
-            // Fetch existing IDs to avoid overwriting human-edited past events (must fetch beyond 1000 limit)
-            const { data: existingEventsData } = await supabase.from('events').select('id').limit(10000);
-            const existingEventIds = new Set(existingEventsData?.map((e: any) => e.id) || []);
-
-            const eventsToUpsert = uniqueEvents.filter((e: any) => {
-                const eventStart = new Date(e.start_time);
-                if (eventStart < threshold && existingEventIds.has(e.id)) {
-                    // Do not overwrite human-managed past events
-                    return false;
-                }
-                return true;
-            });
-
-            if (eventsToUpsert.length > 0) {
-                const { error: upsertErr } = await supabase.from('events').upsert(eventsToUpsert, { onConflict: 'id' });
-                if (upsertErr) throw upsertErr;
-            }
-        }
-
-        return NextResponse.json({ success: true, count: parsedEvents.length });
-    } catch (error: any) {
-        console.error("GCal Sync Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    // Map to internal event rows
+    const parsedEvents: any[] = [];
+    for (const raw of rawEvents) {
+      const row = mapRawToEventRow(raw);
+      if (row) parsedEvents.push(row);
     }
+
+    if (parsedEvents.length === 0) {
+      return NextResponse.json({ success: true, count: 0, source });
+    }
+
+    const colors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#f43f5e'];
+    let colorIdx = 0;
+    const nextColor = () => colors[colorIdx++ % colors.length];
+
+    // Ensure orchestras exist
+    const uniqueOrchNames = [...new Set(parsedEvents.map(e => e._orchName))];
+    for (const name of uniqueOrchNames) {
+      await supabase.from('orchestras').insert({ name, color: nextColor() })
+        .then(r => r.error && r.error.code !== '23505' ? console.error(r.error) : null);
+    }
+    const { data: allOrchs } = await supabase.from('orchestras').select('id, name').limit(5000);
+    const orchMap = new Map(allOrchs?.map(o => [o.name, o.id]) || []);
+
+    // Ensure projects exist (with default status='proposed' from schema)
+    const uniqueProjs = new Map<string, { orchestra_id: string; name: string }>();
+    for (const e of parsedEvents) {
+      const oId = orchMap.get(e._orchName);
+      if (oId) uniqueProjs.set(`${oId}-${e._projName}`, { orchestra_id: oId, name: e._projName });
+    }
+    for (const proj of uniqueProjs.values()) {
+      const { data: existing } = await supabase.from('projects')
+        .select('id').eq('name', proj.name).eq('orchestra_id', proj.orchestra_id).maybeSingle();
+      if (!existing) {
+        await supabase.from('projects').insert({ ...proj, color: nextColor() });
+      }
+    }
+    const { data: allProjs } = await supabase.from('projects').select('id, name, orchestra_id').limit(5000);
+    const projMap = new Map(allProjs?.map(p => [`${p.orchestra_id}-${p.name}`, p.id]) || []);
+
+    // Resolve project_id and deduplicate
+    const uniqueEventsMap = new Map<string, any>();
+    for (const e of parsedEvents) {
+      const oId = orchMap.get(e._orchName);
+      const pId = projMap.get(`${oId}-${e._projName}`);
+      if (!pId) continue;
+      const start = new Date(e.start_time);
+      const end = new Date(e.end_time);
+      const dur = end.getTime() - start.getTime();
+      if (start < timeMin) continue;
+      if (dur <= MIN_DURATION_MS && !e.is_all_day) continue;
+      const { _orchName, _projName, _defaultType, ...row } = e;
+      uniqueEventsMap.set(e.id, { ...row, project_id: pId, _defaultType });
+    }
+    const uniqueEvents = Array.from(uniqueEventsMap.values());
+
+    // Past events before today at 13:30 are immutable if they already exist.
+    const threshold = new Date();
+    threshold.setHours(13, 30, 0, 0);
+    const { data: existingEventsData } = await supabase.from('events').select('id').limit(10000);
+    const existingEventIds = new Set(existingEventsData?.map((e: any) => e.id) || []);
+
+    const toInsert: any[] = [];
+    const toUpdate: any[] = [];
+    for (const e of uniqueEvents) {
+      if (new Date(e.start_time) < threshold && existingEventIds.has(e.id)) continue;
+      const defaultType = e._defaultType;
+      delete e._defaultType;
+      if (existingEventIds.has(e.id)) {
+        // Never overwrite user-mutable fields (type, is_declined, is_toggled, project_id reassignments).
+        toUpdate.push({
+          id: e.id, title: e.title, start_time: e.start_time, end_time: e.end_time,
+          is_all_day: e.is_all_day, status: e.status, source: e.source, external_id: e.external_id,
+        });
+      } else {
+        toInsert.push({ ...e, type: defaultType, is_toggled: true, is_declined: false });
+      }
+    }
+
+    if (toInsert.length > 0) {
+      const { error: insertErr } = await supabase.from('events').insert(toInsert);
+      if (insertErr) throw insertErr;
+    }
+    for (const row of toUpdate) {
+      const { id, ...patch } = row;
+      await supabase.from('events').update(patch).eq('id', id);
+    }
+
+    return NextResponse.json({
+      success: true,
+      source,
+      count: parsedEvents.length,
+      inserted: toInsert.length,
+      updated: toUpdate.length,
+    });
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

@@ -207,14 +207,14 @@ export default function ProjectToggles() {
       </div>
 
       {/* Hidden Events Section (Undo functionality) */}
-      {events.some(e => !e && !settings.hiddenEventIds.includes(e.id)) && (
+      {events.some(e => e && settings.hiddenEventIds.includes(e.id)) && (
         <div className="mt-4 mb-6 pt-4 border-t border-white/10">
           <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center justify-between">
             Hidden Events
-            <span className="bg-gray-800 text-xs px-2 py-0.5 rounded-full">{events.filter(e => !e && !settings.hiddenEventIds.includes(e.id)).length}</span>
+            <span className="bg-gray-800 text-xs px-2 py-0.5 rounded-full">{events.filter(e => e && settings.hiddenEventIds.includes(e.id)).length}</span>
           </h4>
           <div className="flex flex-col gap-2">
-            {events.filter(e => !e && !settings.hiddenEventIds.includes(e.id)).map(e => (
+            {events.filter(e => e && settings.hiddenEventIds.includes(e.id)).map(e => (
               <div key={e.id} className="flex items-center justify-between p-2 rounded bg-gray-900/50 border border-gray-800">
                 <div className="truncate pr-2">
                   <div className="text-xs font-medium text-gray-300 truncate">{e.title}</div>

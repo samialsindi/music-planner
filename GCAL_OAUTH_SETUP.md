@@ -1,11 +1,14 @@
 # Google Calendar Sync Setup (OAuth)
 
-To enable writing events directly to your Google Calendar via the API (which is free), you need to set up OAuth credentials in the Google Cloud Console. This gives your application permission to act on your behalf.
+The app reads upcoming events from your **source** Google Calendar and, when
+you accept a project, publishes its events to a dedicated
+**"Music Planner — Confirmed"** calendar. Your source calendar is never
+modified or deleted.
 
 ## 1. Create a Google Cloud Project
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
 2. Click the project drop-down and select **New Project**.
-3. Name it "Music Planner Sync" and click **Create**.
+3. Name it "Music Planner" and click **Create**.
 
 ## 2. Enable the Google Calendar API
 1. In the sidebar, go to **APIs & Services** > **Library**.
@@ -14,29 +17,64 @@ To enable writing events directly to your Google Calendar via the API (which is 
 ## 3. Configure OAuth Consent Screen
 1. Go to **APIs & Services** > **OAuth consent screen**.
 2. Select **External** and click **Create**.
-3. Fill in the required fields (App name: Music Planner, User support email, Developer contact email).
+3. Fill in App name (Music Planner), user support email, developer contact email.
 4. Click **Save and Continue**.
-5. Click **Add or Remove Scopes** and add `https://www.googleapis.com/auth/calendar.events`.
-6. Add your personal Google email as a **Test user** so you can log in while the app is in "Testing" mode.
+5. **Add or Remove Scopes** → add `https://www.googleapis.com/auth/calendar`.
+6. Add your Google email as a **Test user** so you can sign in while the app is in Testing mode.
 
-## 4. Create Credentials
+## 4. Create OAuth Credentials
 1. Go to **APIs & Services** > **Credentials**.
-2. Click **Create Credentials** > **OAuth client ID**.
-3. Select **Web application** as the application type.
-4. Add your domain to **Authorized redirect URIs**. (e.g., `http://localhost:3000/api/auth/callback/google` for local testing).
-5. Click **Create**.
-6. Copy the **Client ID** and **Client Secret**.
+2. **Create Credentials** > **OAuth client ID**.
+3. Application type: **Web application**.
+4. **Authorized redirect URIs** — add the callback URL for each environment you use:
+   - Local dev: `http://localhost:3000/api/auth/callback/google`
+   - Production: `https://<your-domain>/api/auth/callback/google`
+5. Click **Create** and copy the **Client ID** and **Client Secret**.
 
 ## 5. Environment Variables
-Add these to your Next.js environment (e.g., in `.env.local` or Vercel):
+
+Add to `.env.local` (and to your hosting provider for production):
+
 ```env
 GOOGLE_CLIENT_ID=your_client_id_here
 GOOGLE_CLIENT_SECRET=your_client_secret_here
-NEXTAUTH_SECRET=a_random_string_here # Used if implementing NextAuth.js
+
+# One of these is required so the OAuth callback URL can be built.
+# NEXTAUTH_URL is preferred; falls back to the request origin in dev.
+NEXTAUTH_URL=http://localhost:3000
+
+# Optional: override the redirect URI if it differs from
+# `${NEXTAUTH_URL}/api/auth/callback/google` (e.g. behind a proxy).
+# GOOGLE_OAUTH_REDIRECT_URI=https://example.com/api/auth/callback/google
+
+# Optional: which calendar to read from. Defaults to 'primary'.
+# GCAL_SOURCE_CALENDAR_ID=primary
+
+# Legacy / fallback: app falls back to ICS scrape when OAuth isn't connected.
+# GCAL_ICS_URL=https://calendar.google.com/calendar/ical/.../basic.ics
 ```
 
-## Next Steps for Development
-Once credentials are set up, you will need to:
-1. Install an auth library like `next-auth` to handle the OAuth login flow.
-2. Store the user's `access_token` and `refresh_token` securely.
-3. Update `src/app/api/calendar/sync/route.ts` to use `googleapis` and push/update events matching `status = 'approved'`.
+## 6. Apply the database migration
+
+Run `supabase_migration_project_status.sql` in your Supabase SQL editor. It adds:
+- `projects.status` (proposed/accepted/declined) and `projects.decided_at`
+- `events.is_declined` (the column the code already references)
+- `oauth_tokens` table for storing the Google access/refresh tokens
+
+## 7. Connect
+
+Visit `/settings` and click **Connect Google Calendar**. You'll be redirected
+to Google's consent screen, then back to the app. On first publish, the app
+creates the "Music Planner — Confirmed" calendar automatically.
+
+## How sync works
+
+- **Reads** — `/api/sync` lists events from the source calendar from
+  `today - 7 days` onwards (no hardcoded date). Old events you've already
+  pulled in stay in the local database; nothing in Google is deleted.
+- **Writes** — `/api/calendar/sync` is called automatically when you click
+  Accept / Decline / Reset on the Projects page. Accept publishes the
+  project's events to the confirmed calendar; Decline / Reset removes them
+  if they were previously published.
+- **Incremental** — when supported, subsequent reads use Google's `syncToken`
+  so only changes are fetched.

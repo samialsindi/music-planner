@@ -16,6 +16,8 @@ CREATE TABLE projects (
   name TEXT NOT NULL,
   color TEXT DEFAULT '#9333ea', -- Default purple
   is_active BOOLEAN DEFAULT true,
+  status TEXT CHECK (status IN ('proposed','accepted','declined')) DEFAULT 'proposed',
+  decided_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -32,6 +34,7 @@ CREATE TABLE events (
   source TEXT CHECK (source IN ('manual', 'gcal', 'email', 'freeform')) DEFAULT 'manual',
   external_id TEXT, -- e.g., Google Calendar Event ID
   is_toggled BOOLEAN DEFAULT true,
+  is_declined BOOLEAN DEFAULT false,
   inferred_notes TEXT,
   timpani_required BOOLEAN,
   percussion_required BOOLEAN,

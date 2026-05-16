@@ -47,7 +47,9 @@ export default function Home() {
           id: p.id, orchestraId: p.orchestra_id,
           name: p.name,
           color: p.color,
-          isActive: p.is_active
+          isActive: p.is_active,
+          status: (p.status as 'proposed' | 'accepted' | 'declined') || 'proposed',
+          decidedAt: p.decided_at ? new Date(p.decided_at) : null,
         }));
         setProjects(mappedProjects);
       }
@@ -253,17 +255,6 @@ export default function Home() {
           </div>
           <div className="flex flex-col gap-4 items-end">
             <div className="flex items-center gap-4">
-
-              <button
-                onClick={handleCleanUp}
-                disabled={isProcessing}
-                className={`px-4 py-2 text-sm rounded-xl transition-colors font-medium whitespace-nowrap ${isProcessing
-                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                    : 'glass-panel text-orange-400 border border-orange-500/30 hover:bg-orange-500/10'
-                  }`}
-              >
-                🧹 Clean Up
-              </button>
 
               <button
                 onClick={handleCleanUp}

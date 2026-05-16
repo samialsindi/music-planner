@@ -1,10 +1,42 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+
+interface AuthStatus {
+  connected: boolean;
+  hasConfirmedCalendar: boolean;
+  configured: boolean;
+}
 
 export default function SettingsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gcal') === 'connected') toast.success('Google Calendar connected');
+    if (params.get('gcal_error')) toast.error(`Google Calendar: ${params.get('gcal_error')}`);
+    fetch('/api/auth/status').then(r => r.json()).then(setAuthStatus).catch(() => setAuthStatus(null));
+  }, []);
+
+  const handleConnect = () => {
+    window.location.href = '/api/auth/google';
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm('Disconnect Google Calendar? Already-published events on the confirmed calendar will remain but new accept/decline decisions will not sync.')) return;
+    setAuthBusy(true);
+    try {
+      await fetch('/api/auth/disconnect', { method: 'POST' });
+      toast.success('Disconnected');
+      const status = await fetch('/api/auth/status').then(r => r.json());
+      setAuthStatus(status);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -68,6 +100,48 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold heading-gradient mb-2">Settings</h1>
         <p className="text-gray-400">Manage your application data and specialized tools.</p>
       </div>
+
+      <section className="glass-panel p-8 space-y-4">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold text-white">Google Calendar</h2>
+            <p className="text-sm text-gray-400 max-w-xl">
+              When connected, the app reads upcoming events from your source calendar and publishes accepted
+              projects to a separate <span className="font-mono text-purple-300">Music Planner — Confirmed</span> calendar.
+              Your source calendar is never modified or deleted.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {!authStatus?.configured ? (
+              <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 max-w-xs">
+                OAuth not configured. Set <span className="font-mono">GOOGLE_CLIENT_ID</span> and{' '}
+                <span className="font-mono">GOOGLE_CLIENT_SECRET</span>. See <span className="font-mono">GCAL_OAUTH_SETUP.md</span>.
+              </div>
+            ) : authStatus?.connected ? (
+              <>
+                <span className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-3 py-1">
+                  ✓ Connected{authStatus.hasConfirmedCalendar ? ' · calendar provisioned' : ''}
+                </span>
+                <button
+                  onClick={handleDisconnect}
+                  disabled={authBusy}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium text-rose-300"
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleConnect}
+                disabled={authBusy}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium"
+              >
+                Connect Google Calendar
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
       <section className="glass-panel p-8 space-y-6">
         <div className="flex items-start justify-between border-b border-white/5 pb-6">

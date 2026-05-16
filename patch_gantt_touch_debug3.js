@@ -1,9 +1,0 @@
-const fs = require('fs');
-const path = require('path');
-
-const filePath = path.join(__dirname, 'src', 'components', 'GanttView.tsx');
-let content = fs.readFileSync(filePath, 'utf8');
-
-content = content.replace("import { useLongPress } from '@/hooks/useLongPress';\n'use client';", "'use client';\nimport { useLongPress } from '@/hooks/useLongPress';");
-
-fs.writeFileSync(filePath, content);
