@@ -1,6 +1,12 @@
 import { supabase } from './supabase';
 
-export type AuditActionType = 'TOGGLE_PROJECT' | 'TOGGLE_EVENT' | 'UPDATE_EVENT' | 'DELETE_EVENT' | 'SYNC_CALENDAR';
+export type AuditActionType =
+  | 'TOGGLE_PROJECT'
+  | 'TOGGLE_EVENT'
+  | 'UPDATE_EVENT'
+  | 'DELETE_EVENT'
+  | 'SYNC_CALENDAR'
+  | 'PROJECT_DECISION';
 
 export interface AuditLogEntry {
   id?: string;
@@ -30,10 +36,11 @@ export async function logAction(
   }
 }
 
-export async function clearAuditLog() {
+export async function pruneAuditLog(maxAgeDays = 30) {
   try {
-    await supabase.from('audit_log').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('audit_log').delete().lt('created_at', cutoff);
   } catch (err) {
-    console.error('Failed to clear audit log', err);
+    console.error('Failed to prune audit log', err);
   }
 }

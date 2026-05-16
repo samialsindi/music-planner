@@ -326,7 +326,9 @@ export default function CalendarView() {
                              name: newProj.name,
                              orchestraId: newProj.orchestra_id,
                              color: newProj.color,
-                             isActive: newProj.is_active
+                             isActive: newProj.is_active,
+                             status: 'proposed',
+                             decidedAt: null,
                            }]);
                            setEditingEvent({...editingEvent, resource: {...editingEvent.resource, projectId: newProj.id}});
                          }
@@ -392,7 +394,7 @@ export default function CalendarView() {
                       const { data: newProj } = await supabase.from('projects').insert({ name: 'Personal Events', orchestra_id: orchId, color: '#64748b' }).select().single();
                       if (newProj) {
                         projId = newProj.id;
-                        useAppStore.getState().setProjects([...useAppStore.getState().projects, { id: newProj.id, name: 'Personal Events', orchestraId: orchId, color: '#64748b', isActive: true }]);
+                        useAppStore.getState().setProjects([...useAppStore.getState().projects, { id: newProj.id, name: 'Personal Events', orchestraId: orchId, color: '#64748b', isActive: true, status: 'proposed', decidedAt: null }]);
                       }
                   }
 

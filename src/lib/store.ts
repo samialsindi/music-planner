@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export type EventType = 'rehearsal' | 'concert' | 'personal' | 'other';
 export type EventSource = 'manual' | 'gcal' | 'email' | 'freeform';
 export type EventStatus = 'pending' | 'approved';
+export type ProjectStatus = 'proposed' | 'accepted' | 'declined';
 
 export interface ProjectEvent {
   id: string;
@@ -37,6 +38,8 @@ export interface Project {
   name: string;
   color: string;
   isActive: boolean; // High level toggle
+  status: ProjectStatus; // "Am I working on this?" decision
+  decidedAt?: Date | null;
 }
 
 export interface UserSettings {
@@ -77,10 +80,13 @@ interface AppState {
   setSelectedClashEventId: (id: string | null) => void;
   toggleOrchestra: (orchestraId: string) => void;
   toggleProject: (projectId: string) => Promise<void>;
-  toggleEventType: (eventType: keyof EventTypeFilters) => void;
+  toggleEventType: (eventType: keyof EventTypeFilters) => Promise<void>;
   toggleEvent: (eventId: string) => Promise<void>;
   addEvent: (event: ProjectEvent) => void;
-  updateEvent: (event: ProjectEvent) => void;
+  updateEvent: (event: Partial<ProjectEvent> & { id: string }) => Promise<void>;
+  acceptProject: (projectId: string) => Promise<void>;
+  declineProject: (projectId: string) => Promise<void>;
+  resetProjectDecision: (projectId: string) => Promise<void>;
   setOrchestras: (orchestras: Orchestra[]) => void;
   setProjects: (projects: Project[]) => void;
   setEvents: (events: ProjectEvent[]) => void;
@@ -192,20 +198,79 @@ toggleEvent: async (eventId) => {
     await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
   },
 addEvent: (event) => set((state) => ({ events: isEventValidDuration(event) ? [...state.events, event] : state.events })),
-  updateEvent: async (updatedEvent) => {
+  updateEvent: async (patch) => {
     const { events } = get();
-    const oldEvent = events.find(e => e.id === updatedEvent.id);
-    if (oldEvent) {
-      const { logAction } = await import('./audit');
-      await logAction('UPDATE_EVENT', updatedEvent.id, oldEvent, updatedEvent);
-    }
+    const oldEvent = events.find(e => e.id === patch.id);
+    if (!oldEvent) return;
+    const merged: ProjectEvent = { ...oldEvent, ...patch };
+    const { logAction } = await import('./audit');
+    await logAction('UPDATE_EVENT', patch.id, oldEvent, merged);
     set((state) => {
-      if (isEventValidDuration(updatedEvent)) {
-        return { events: state.events.map(e => e.id === updatedEvent.id ? updatedEvent : e) };
-      } else {
-        return { events: state.events.filter(e => e.id !== updatedEvent.id) };
+      if (isEventValidDuration(merged)) {
+        return { events: state.events.map(e => e.id === patch.id ? merged : e) };
       }
+      return { events: state.events.filter(e => e.id !== patch.id) };
     });
+  },
+
+  acceptProject: async (projectId) => {
+    const { projects } = get();
+    const prev = projects.find(p => p.id === projectId);
+    if (!prev) return;
+    const decidedAt = new Date();
+    const { logAction } = await import('./audit');
+    await logAction('PROJECT_DECISION', projectId, { status: prev.status, decidedAt: prev.decidedAt }, { status: 'accepted', decidedAt });
+    set((state) => ({
+      projects: state.projects.map(p => p.id === projectId ? { ...p, status: 'accepted', decidedAt } : p),
+    }));
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('projects').update({ status: 'accepted', decided_at: decidedAt.toISOString() }).eq('id', projectId);
+    // Fire-and-forget publish to confirmed Google calendar (no-op until OAuth is connected)
+    fetch('/api/calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, action: 'accept' }),
+    }).catch(() => {});
+  },
+
+  declineProject: async (projectId) => {
+    const { projects } = get();
+    const prev = projects.find(p => p.id === projectId);
+    if (!prev) return;
+    const decidedAt = new Date();
+    const { logAction } = await import('./audit');
+    await logAction('PROJECT_DECISION', projectId, { status: prev.status, decidedAt: prev.decidedAt }, { status: 'declined', decidedAt });
+    set((state) => ({
+      projects: state.projects.map(p => p.id === projectId ? { ...p, status: 'declined', decidedAt } : p),
+    }));
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('projects').update({ status: 'declined', decided_at: decidedAt.toISOString() }).eq('id', projectId);
+    fetch('/api/calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, action: 'decline' }),
+    }).catch(() => {});
+  },
+
+  resetProjectDecision: async (projectId) => {
+    const { projects } = get();
+    const prev = projects.find(p => p.id === projectId);
+    if (!prev) return;
+    const { logAction } = await import('./audit');
+    await logAction('PROJECT_DECISION', projectId, { status: prev.status, decidedAt: prev.decidedAt }, { status: 'proposed', decidedAt: null });
+    set((state) => ({
+      projects: state.projects.map(p => p.id === projectId ? { ...p, status: 'proposed', decidedAt: null } : p),
+    }));
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+    await supabase.from('projects').update({ status: 'proposed', decided_at: null }).eq('id', projectId);
+    fetch('/api/calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, action: 'reset' }),
+    }).catch(() => {});
   },
   setOrchestras: (orchestras) => set({ orchestras }),
   setProjects: (projects) => set({ projects }),
@@ -249,6 +314,17 @@ addEvent: (event) => set((state) => ({ events: isEventValidDuration(event) ? [..
 
       setSettings({ ...settings, hiddenEventIds: newHiddenIds });
       await supabase.from('user_settings').update({ hidden_event_ids: newHiddenIds }).eq('id', 1);
+
+    } else if (log.action_type === 'PROJECT_DECISION') {
+      const prev = log.previous_state as { status: ProjectStatus; decidedAt: Date | null };
+      const decidedAt = prev.decidedAt ? new Date(prev.decidedAt) : null;
+      set((state) => ({
+        projects: state.projects.map(p => p.id === log.entity_id ? { ...p, status: prev.status, decidedAt } : p),
+      }));
+      await supabase.from('projects').update({
+        status: prev.status,
+        decided_at: decidedAt ? decidedAt.toISOString() : null,
+      }).eq('id', log.entity_id);
 
     } else if (log.action_type === 'UPDATE_EVENT') {
       const prevEvent = log.previous_state;
